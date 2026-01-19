@@ -196,6 +196,15 @@ export default function Generator() {
         );
         setLeads(leadsRes.data.leads);
         toast.success(`Imported ${leadsRes.data.imported} leads`);
+        
+        // Initialize generation status immediately with the imported leads count
+        setGenerationStatus({
+          completed: 0,
+          processing: 0,
+          pending: leadsRes.data.imported,
+          failed: 0,
+          total: leadsRes.data.imported
+        });
       }
 
       // Start video generation
@@ -220,9 +229,17 @@ export default function Generator() {
         setGenerationStatus(res.data.status);
         
         const { completed, total, processing, pending } = res.data.status;
+        const { isProcessing: serverProcessing, queuePosition } = res.data;
         
-        if (processing > 0 || pending > 0) {
-          setTimeout(poll, 3000);
+        // Continue polling if there's work in progress:
+        // - Items in processing state
+        // - Items in pending state (including leads without video records)
+        // - Server says it's still processing
+        // - Items still in queue
+        const stillWorking = processing > 0 || pending > 0 || serverProcessing || queuePosition > 0;
+        
+        if (stillWorking) {
+          setTimeout(poll, 2000); // Poll every 2 seconds
         } else {
           setIsGenerating(false);
           toast.success(`All ${completed} videos generated!`);
@@ -230,9 +247,12 @@ export default function Generator() {
         }
       } catch (error) {
         console.error('Status poll error:', error);
+        // On error, keep polling for a bit
+        setTimeout(poll, 3000);
       }
     };
     
+    // Start polling immediately
     poll();
   };
 

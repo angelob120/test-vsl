@@ -203,23 +203,45 @@ router.get('/status/:campaignId', async (req, res) => {
   try {
     const { campaignId } = req.params;
 
-    const result = await pool.query(`
+    // Get video generation status from generated_videos table
+    const videoResult = await pool.query(`
       SELECT 
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
         COUNT(*) FILTER (WHERE status = 'processing') as processing,
         COUNT(*) FILTER (WHERE status = 'pending') as pending,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COUNT(*) as total
+        COUNT(*) as video_count
       FROM generated_videos
       WHERE campaign_id = $1
     `, [campaignId]);
 
-    const queuePosition = processingQueue.filter(j => j.campaignId === campaignId).length;
+    // Get total leads count for this campaign
+    const leadsResult = await pool.query(`
+      SELECT COUNT(*) as lead_count FROM leads WHERE campaign_id = $1
+    `, [campaignId]);
+
+    const videoStatus = videoResult.rows[0];
+    const totalLeads = parseInt(leadsResult.rows[0].lead_count) || 0;
+    const videosCreated = parseInt(videoStatus.video_count) || 0;
+    
+    // Calculate how many leads are still waiting in queue (no video record yet)
+    const queuedInMemory = processingQueue.filter(j => j.campaignId === campaignId).length;
+    const waitingForProcessing = totalLeads - videosCreated;
+    
+    // The "pending" count should include leads that don't have video records yet
+    const actualPending = parseInt(videoStatus.pending) || 0;
+    const totalPending = actualPending + Math.max(0, waitingForProcessing);
 
     res.json({
       success: true,
-      status: result.rows[0],
-      queuePosition,
+      status: {
+        completed: parseInt(videoStatus.completed) || 0,
+        processing: parseInt(videoStatus.processing) || 0,
+        pending: totalPending,
+        failed: parseInt(videoStatus.failed) || 0,
+        total: totalLeads
+      },
+      queuePosition: queuedInMemory,
       isProcessing
     });
   } catch (error) {
