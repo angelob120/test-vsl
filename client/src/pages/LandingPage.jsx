@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { Play, Pause, Volume2, VolumeX, Maximize, Calendar, Loader2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Calendar, Loader2, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 
 const API_URL = '/api';
 
@@ -16,6 +16,8 @@ export default function LandingPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     fetchVideoData();
@@ -54,6 +56,13 @@ export default function LandingPage() {
     if (videoRef.current) {
       const progress = (videoRef.current.currentTime / videoRef.current.duration) * 100;
       setProgress(progress);
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
     }
   };
 
@@ -64,6 +73,25 @@ export default function LandingPage() {
       const percentage = x / rect.width;
       videoRef.current.currentTime = percentage * videoRef.current.duration;
     }
+  };
+
+  const skip = (seconds) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.currentTime + seconds, duration));
+    }
+  };
+
+  const rewind = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  const formatTime = (time) => {
+    if (isNaN(time)) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const toggleFullscreen = () => {
@@ -87,10 +115,10 @@ export default function LandingPage() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${data?.dark_mode ? 'bg-gray-900' : 'bg-gradient-to-br from-slate-50 to-slate-100'}`}>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary-500 mx-auto mb-4" />
-          <p className="text-gray-500">Loading your video...</p>
+          <p className="text-gray-400">Loading your video...</p>
         </div>
       </div>
     );
@@ -98,35 +126,33 @@ export default function LandingPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
-          <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-4">
             <span className="text-4xl">😕</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Video Not Found</h1>
-          <p className="text-gray-500">{error}</p>
+          <h1 className="text-2xl font-bold text-white mb-2">Video Not Found</h1>
+          <p className="text-gray-400">{error}</p>
         </div>
       </div>
     );
   }
 
-  const isDark = data?.dark_mode;
-
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-gray-900' : 'bg-gradient-to-br from-slate-50 via-white to-slate-100'}`}>
+    <div className="min-h-screen transition-colors duration-300 bg-gray-900">
       {/* Background decoration */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute -top-40 -right-40 w-80 h-80 rounded-full blur-3xl ${isDark ? 'bg-primary-500/10' : 'bg-primary-500/20'}`} />
-        <div className={`absolute -bottom-40 -left-40 w-80 h-80 rounded-full blur-3xl ${isDark ? 'bg-accent-500/10' : 'bg-accent-500/20'}`} />
+        <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full blur-3xl bg-primary-500/10" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full blur-3xl bg-accent-500/10" />
       </div>
 
       <div className="relative z-10 max-w-4xl mx-auto px-4 py-8 md:py-16">
         {/* Header */}
         <header className="text-center mb-8">
-          <h1 className={`text-3xl md:text-4xl font-bold font-display mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          <h1 className="text-3xl md:text-4xl font-bold font-display mb-2 text-white">
             {personalize(data?.video_title || 'A video for you 👋')}
           </h1>
-          <p className={`text-xl ${isDark ? 'text-primary-400' : 'text-primary-600'}`}>
+          <p className="text-xl text-primary-400">
             {data?.first_name && <span className="font-semibold">@{data.first_name}</span>}
             {data?.company_name && <span className="font-semibold ml-2">@{data.company_name}</span>}
           </p>
@@ -134,7 +160,7 @@ export default function LandingPage() {
 
         {/* Video Player */}
         <div 
-          className={`relative rounded-2xl overflow-hidden shadow-2xl mb-8 group ${isDark ? 'bg-gray-800' : 'bg-white'}`}
+          className="relative rounded-2xl overflow-hidden shadow-2xl mb-8 group bg-gray-800"
           onMouseEnter={() => setShowControls(true)}
           onMouseLeave={() => isPlaying && setShowControls(false)}
         >
@@ -144,11 +170,13 @@ export default function LandingPage() {
             src={`${API_URL}/videos/file/${slug}`}
             className="w-full aspect-video object-cover"
             onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={() => setIsPlaying(false)}
             poster={`${API_URL}/videos/thumbnail/${slug}`}
             playsInline
+            onClick={togglePlay}
           />
 
           {/* Play Button Overlay */}
@@ -167,21 +195,44 @@ export default function LandingPage() {
           <div className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity ${showControls ? 'opacity-100' : 'opacity-0'}`}>
             {/* Progress Bar */}
             <div 
-              className="h-1 bg-white/30 rounded-full mb-4 cursor-pointer"
+              className="h-1.5 bg-white/30 rounded-full mb-4 cursor-pointer group/progress"
               onClick={handleSeek}
             >
               <div 
-                className="h-full bg-primary-500 rounded-full transition-all"
+                className="h-full bg-primary-500 rounded-full transition-all relative"
                 style={{ width: `${progress}%` }}
-              />
+              >
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity shadow-lg" />
+              </div>
             </div>
 
             {/* Control Buttons */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {/* Rewind to start */}
+                <button
+                  onClick={rewind}
+                  className="w-9 h-9 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
+                  title="Restart"
+                >
+                  <RotateCcw className="w-4 h-4 text-white" />
+                </button>
+                
+                {/* Skip back 10s */}
+                <button
+                  onClick={() => skip(-10)}
+                  className="w-9 h-9 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors relative"
+                  title="Skip back 10s"
+                >
+                  <SkipBack className="w-4 h-4 text-white" />
+                  <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-white">10</span>
+                </button>
+                
+                {/* Play/Pause */}
                 <button
                   onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
+                  className="w-11 h-11 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
+                  title={isPlaying ? 'Pause' : 'Play'}
                 >
                   {isPlaying ? (
                     <Pause className="w-5 h-5 text-white" />
@@ -189,23 +240,46 @@ export default function LandingPage() {
                     <Play className="w-5 h-5 text-white ml-0.5" />
                   )}
                 </button>
+                
+                {/* Skip forward 10s */}
+                <button
+                  onClick={() => skip(10)}
+                  className="w-9 h-9 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors relative"
+                  title="Skip forward 10s"
+                >
+                  <SkipForward className="w-4 h-4 text-white" />
+                  <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-white">10</span>
+                </button>
+                
+                {/* Mute */}
                 <button
                   onClick={toggleMute}
-                  className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
+                  className="w-9 h-9 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
+                  title={isMuted ? 'Unmute' : 'Mute'}
                 >
                   {isMuted ? (
-                    <VolumeX className="w-5 h-5 text-white" />
+                    <VolumeX className="w-4 h-4 text-white" />
                   ) : (
-                    <Volume2 className="w-5 h-5 text-white" />
+                    <Volume2 className="w-4 h-4 text-white" />
                   )}
                 </button>
               </div>
-              <button
-                onClick={toggleFullscreen}
-                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
-              >
-                <Maximize className="w-5 h-5 text-white" />
-              </button>
+              
+              <div className="flex items-center gap-3">
+                {/* Time Display */}
+                <span className="text-sm text-white/80 font-mono">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </span>
+                
+                {/* Fullscreen */}
+                <button
+                  onClick={toggleFullscreen}
+                  className="w-9 h-9 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:bg-white/30 transition-colors"
+                  title="Fullscreen"
+                >
+                  <Maximize className="w-4 h-4 text-white" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -239,13 +313,13 @@ export default function LandingPage() {
 
         {/* Description */}
         {data?.video_description && (
-          <p className={`text-center mt-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className="text-center mt-6 text-gray-400">
             {personalize(data.video_description)}
           </p>
         )}
 
         {/* Footer */}
-        <footer className={`text-center mt-12 pt-8 border-t ${isDark ? 'border-gray-800 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
+        <footer className="text-center mt-12 pt-8 border-t border-gray-800 text-gray-500">
           <p className="text-sm">
             Powered by <span className="font-semibold text-primary-500">Mass VSL Generator</span>
           </p>
