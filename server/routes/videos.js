@@ -131,11 +131,17 @@ async function processVideoJob(processor, job) {
   const outputDir = path.join(__dirname, '../../public/videos');
 
   try {
-    // Create pending video record
+    // Create pending video record (upsert - one video per lead)
     await pool.query(`
       INSERT INTO generated_videos (lead_id, campaign_id, unique_slug, status)
       VALUES ($1, $2, $3, 'processing')
-      ON CONFLICT (lead_id) DO UPDATE SET status = 'processing', updated_at = CURRENT_TIMESTAMP
+      ON CONFLICT ON CONSTRAINT unique_lead_video 
+      DO UPDATE SET 
+        status = 'processing', 
+        unique_slug = EXCLUDED.unique_slug,
+        campaign_id = EXCLUDED.campaign_id,
+        error_message = NULL,
+        updated_at = CURRENT_TIMESTAMP
     `, [leadId, campaignId, uniqueSlug]);
 
     console.log(`🎬 Processing video for lead ${leadId}: ${lead.website_url}`);
@@ -173,15 +179,22 @@ async function processVideoJob(processor, job) {
       throw new Error(result.error);
     }
   } catch (error) {
-    console.error(`❌ Video failed for lead ${leadId}:`, error);
+    console.error(`❌ Video failed for lead ${leadId}:`, error.message);
     
-    await pool.query(`
-      UPDATE generated_videos 
-      SET status = 'failed',
-          error_message = $1,
+    // Try to update the record with failure status
+    try {
+      await pool.query(`
+        INSERT INTO generated_videos (lead_id, campaign_id, unique_slug, status, error_message)
+        VALUES ($1, $2, $3, 'failed', $4)
+        ON CONFLICT ON CONSTRAINT unique_lead_video 
+        DO UPDATE SET 
+          status = 'failed',
+          error_message = $4,
           updated_at = CURRENT_TIMESTAMP
-      WHERE lead_id = $2
-    `, [error.message, leadId]);
+      `, [leadId, campaignId, uniqueSlug, error.message]);
+    } catch (updateError) {
+      console.error(`❌ Failed to update error status for lead ${leadId}:`, updateError.message);
+    }
   }
 }
 

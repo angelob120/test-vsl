@@ -76,7 +76,8 @@ export async function initDatabase() {
         error_message TEXT,
         views INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_lead_video UNIQUE (lead_id)
       );
 
       -- Video analytics table
@@ -96,6 +97,28 @@ export async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_videos_campaign ON generated_videos(campaign_id);
       CREATE INDEX IF NOT EXISTS idx_videos_slug ON generated_videos(unique_slug);
       CREATE INDEX IF NOT EXISTS idx_analytics_video ON video_analytics(video_id);
+      
+      -- Migration: Add unique constraint on lead_id if it doesn't exist
+      -- This handles existing databases that were created without the constraint
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conname = 'unique_lead_video' 
+          AND conrelid = 'generated_videos'::regclass
+        ) THEN
+          -- First, remove any duplicate lead_id entries (keep the most recent one)
+          DELETE FROM generated_videos a USING generated_videos b
+          WHERE a.lead_id = b.lead_id 
+          AND a.created_at < b.created_at;
+          
+          -- Then add the constraint
+          ALTER TABLE generated_videos ADD CONSTRAINT unique_lead_video UNIQUE (lead_id);
+        END IF;
+      EXCEPTION WHEN duplicate_object THEN
+        -- Constraint already exists, ignore
+        NULL;
+      END $$;
     `);
     console.log('✅ Database schema initialized');
   } catch (error) {
