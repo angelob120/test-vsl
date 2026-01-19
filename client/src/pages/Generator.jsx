@@ -809,237 +809,6 @@ export default function Generator() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-x-hidden">
-        {/* Generated Videos Panel - Always visible */}
-        <div className="mb-8 glass rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Video className="w-5 h-5 text-primary-400" />
-              Generated Videos
-              <span className="text-sm font-normal text-gray-400">
-                ({allVideosTotal} total)
-              </span>
-            </h2>
-            <div className="flex items-center gap-3">
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={allVideosSearch}
-                  onChange={(e) => setAllVideosSearch(e.target.value)}
-                  placeholder="Search videos..."
-                  className="input-field pl-9 py-2 w-64"
-                />
-                {allVideosSearch && (
-                  <button
-                    onClick={() => setAllVideosSearch('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <button 
-                onClick={() => fetchAllVideos(true)} 
-                className="btn-secondary text-sm"
-                disabled={isLoadingAllVideos}
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingAllVideos ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          </div>
-          
-          {allVideos.length > 0 ? (
-            <>
-              <div className="table-container max-h-96 overflow-y-auto">
-                <table className="data-table">
-                  <thead className="sticky top-0 bg-gray-800/95 backdrop-blur z-10">
-                    <tr>
-                      <th>#</th>
-                      <th>Campaign</th>
-                      <th>Website</th>
-                      <th>Name</th>
-                      <th>Company</th>
-                      <th>Views</th>
-                      <th>Created</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allVideos.map((video, i) => (
-                      <tr key={video.id}>
-                        <td className="text-gray-400">{i + 1}</td>
-                        <td className="max-w-[120px] truncate">
-                          <span className="text-primary-400">{video.campaign_name}</span>
-                        </td>
-                        <td className="max-w-[180px] truncate">
-                          <a 
-                            href={video.website_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-primary-400 hover:underline"
-                          >
-                            {video.website_url}
-                          </a>
-                        </td>
-                        <td>{video.first_name}</td>
-                        <td>{video.company_name}</td>
-                        <td>{video.views || 0}</td>
-                        <td className="text-gray-400 text-xs">
-                          {new Date(video.created_at).toLocaleDateString()}
-                        </td>
-                        <td>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => copyLink(video.unique_slug)}
-                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Copy Link"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                            <a
-                              href={`/v/${video.unique_slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Open Page"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                            <button
-                              onClick={() => downloadVideo(video.unique_slug, video.first_name || video.company_name)}
-                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Download Video"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                            <a
-                              href={`/api/videos/preview/${video.unique_slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Preview Video"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* Load More Button */}
-              {hasMoreVideos && (
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={loadMoreVideos}
-                    disabled={isLoadingAllVideos}
-                    className="btn-secondary"
-                  >
-                    {isLoadingAllVideos ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4 mr-2" />
-                        Load More ({Math.min(allVideosTotal - allVideos.length, VIDEOS_PER_PAGE)} more)
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-              
-              {/* Showing count */}
-              <div className="mt-3 text-center text-sm text-gray-400">
-                Showing {allVideos.length} of {allVideosTotal} videos
-                {allVideosTotal >= MAX_VIDEOS && ` (limited to ${MAX_VIDEOS})`}
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-12 text-gray-400">
-              <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              {isLoadingAllVideos ? (
-                <div className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <p>Loading videos...</p>
-                </div>
-              ) : allVideosSearch ? (
-                <p>No videos found matching "{allVideosSearch}"</p>
-              ) : (
-                <p>No videos generated yet</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Campaign History Panel - Below Generated Videos */}
-        {campaigns.length > 0 && (
-          <div className="mb-8 glass rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FolderOpen className="w-5 h-5 text-primary-400" />
-                Your Campaigns
-              </h2>
-              <button onClick={fetchCampaigns} className="btn-secondary text-sm">
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingCampaigns ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {campaigns.slice(0, 8).map((camp) => (
-                <div
-                  key={camp.id}
-                  onClick={() => selectCampaign(camp)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
-                    selectedCampaign?.id === camp.id
-                      ? 'border-primary-500 bg-primary-500/10'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-medium truncate flex-1">{camp.name}</h3>
-                    <button
-                      onClick={(e) => deleteCampaign(camp.id, e)}
-                      className="p-1 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {camp.lead_count || 0}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Video className="w-3 h-3" />
-                      {camp.video_count || 0}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(camp.created_at).toLocaleDateString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {campaigns.length > 8 && (
-              <button
-                onClick={() => setActiveTab('history')}
-                className="mt-4 text-sm text-primary-400 hover:text-primary-300"
-              >
-                View all {campaigns.length} campaigns →
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Main Content Area */}
         {activeTab === 'create' ? (
           /* Create Campaign View */
@@ -1722,6 +1491,237 @@ export default function Generator() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Generated Videos Panel - Always visible */}
+        <div className="mt-8 glass rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Video className="w-5 h-5 text-primary-400" />
+              Generated Videos
+              <span className="text-sm font-normal text-gray-400">
+                ({allVideosTotal} total)
+              </span>
+            </h2>
+            <div className="flex items-center gap-3">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={allVideosSearch}
+                  onChange={(e) => setAllVideosSearch(e.target.value)}
+                  placeholder="Search videos..."
+                  className="input-field pl-9 py-2 w-64"
+                />
+                {allVideosSearch && (
+                  <button
+                    onClick={() => setAllVideosSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={() => fetchAllVideos(true)} 
+                className="btn-secondary text-sm"
+                disabled={isLoadingAllVideos}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingAllVideos ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+          
+          {allVideos.length > 0 ? (
+            <>
+              <div className="table-container max-h-96 overflow-y-auto">
+                <table className="data-table">
+                  <thead className="sticky top-0 bg-gray-800/95 backdrop-blur z-10">
+                    <tr>
+                      <th>#</th>
+                      <th>Campaign</th>
+                      <th>Website</th>
+                      <th>Name</th>
+                      <th>Company</th>
+                      <th>Views</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allVideos.map((video, i) => (
+                      <tr key={video.id}>
+                        <td className="text-gray-400">{i + 1}</td>
+                        <td className="max-w-[120px] truncate">
+                          <span className="text-primary-400">{video.campaign_name}</span>
+                        </td>
+                        <td className="max-w-[180px] truncate">
+                          <a 
+                            href={video.website_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-primary-400 hover:underline"
+                          >
+                            {video.website_url}
+                          </a>
+                        </td>
+                        <td>{video.first_name}</td>
+                        <td>{video.company_name}</td>
+                        <td>{video.views || 0}</td>
+                        <td className="text-gray-400 text-xs">
+                          {new Date(video.created_at).toLocaleDateString()}
+                        </td>
+                        <td>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => copyLink(video.unique_slug)}
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Copy Link"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <a
+                              href={`/v/${video.unique_slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Open Page"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              onClick={() => downloadVideo(video.unique_slug, video.first_name || video.company_name)}
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Download Video"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <a
+                              href={`/api/videos/preview/${video.unique_slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Preview Video"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Load More Button */}
+              {hasMoreVideos && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={loadMoreVideos}
+                    disabled={isLoadingAllVideos}
+                    className="btn-secondary"
+                  >
+                    {isLoadingAllVideos ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 mr-2" />
+                        Load More ({Math.min(allVideosTotal - allVideos.length, VIDEOS_PER_PAGE)} more)
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+              
+              {/* Showing count */}
+              <div className="mt-3 text-center text-sm text-gray-400">
+                Showing {allVideos.length} of {allVideosTotal} videos
+                {allVideosTotal >= MAX_VIDEOS && ` (limited to ${MAX_VIDEOS})`}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-gray-400">
+              <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              {isLoadingAllVideos ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <p>Loading videos...</p>
+                </div>
+              ) : allVideosSearch ? (
+                <p>No videos found matching "{allVideosSearch}"</p>
+              ) : (
+                <p>No videos generated yet</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Your Campaigns Panel - At the bottom */}
+        {campaigns.length > 0 && (
+          <div className="mt-8 glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <FolderOpen className="w-5 h-5 text-primary-400" />
+                Your Campaigns
+              </h2>
+              <button onClick={fetchCampaigns} className="btn-secondary text-sm">
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingCampaigns ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {campaigns.slice(0, 8).map((camp) => (
+                <div
+                  key={camp.id}
+                  onClick={() => selectCampaign(camp)}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+                    selectedCampaign?.id === camp.id
+                      ? 'border-primary-500 bg-primary-500/10'
+                      : 'border-white/10 bg-white/5 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-medium truncate flex-1">{camp.name}</h3>
+                    <button
+                      onClick={(e) => deleteCampaign(camp.id, e)}
+                      className="p-1 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {camp.lead_count || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Video className="w-3 h-3" />
+                      {camp.video_count || 0}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(camp.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {campaigns.length > 8 && (
+              <button
+                onClick={() => setActiveTab('history')}
+                className="mt-4 text-sm text-primary-400 hover:text-primary-300"
+              >
+                View all {campaigns.length} campaigns →
+              </button>
             )}
           </div>
         )}
