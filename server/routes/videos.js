@@ -21,6 +21,8 @@ router.post('/generate/:campaignId', async (req, res) => {
     const { campaignId } = req.params;
     const { leadIds } = req.body; // Optional: specific leads to process
 
+    console.log(`📹 Generate request for campaign: ${campaignId}`);
+
     // Get campaign details
     const campaignResult = await pool.query(
       'SELECT * FROM campaigns WHERE id = $1',
@@ -28,13 +30,29 @@ router.post('/generate/:campaignId', async (req, res) => {
     );
 
     if (campaignResult.rows.length === 0) {
+      console.log('❌ Campaign not found');
       return res.status(404).json({ success: false, error: 'Campaign not found' });
     }
 
     const campaign = campaignResult.rows[0];
+    console.log('📋 Campaign found:', campaign.name);
+    console.log('🎬 Intro video path:', campaign.intro_video_path);
 
     if (!campaign.intro_video_path) {
+      console.log('❌ No intro video path in database');
       return res.status(400).json({ success: false, error: 'No intro video uploaded for this campaign' });
+    }
+
+    // Check if video file exists
+    try {
+      await fs.access(campaign.intro_video_path);
+      console.log('✅ Video file exists');
+    } catch (err) {
+      console.log('❌ Video file not found at:', campaign.intro_video_path);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Video file not found. Path: ${campaign.intro_video_path}` 
+      });
     }
 
     // Get leads to process
@@ -48,6 +66,8 @@ router.post('/generate/:campaignId', async (req, res) => {
 
     const leadsResult = await pool.query(leadsQuery, queryParams);
     const leads = leadsResult.rows;
+
+    console.log(`👥 Found ${leads.length} leads`);
 
     if (leads.length === 0) {
       return res.status(400).json({ success: false, error: 'No leads found for this campaign' });

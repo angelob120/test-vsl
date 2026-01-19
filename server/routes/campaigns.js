@@ -24,8 +24,6 @@ const storage = multer.diskStorage({
   }
 });
 
-
-
 const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
@@ -39,12 +37,63 @@ const upload = multer({
   }
 });
 
+// Debug endpoint - list all campaigns with paths
+router.get('/debug', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name, intro_video_path, secondary_video_path, created_at 
+      FROM campaigns 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `);
+    
+    // Check if files exist for each campaign
+    const campaignsWithFileStatus = await Promise.all(
+      result.rows.map(async (campaign) => {
+        let introExists = false;
+        let secondaryExists = false;
+        
+        if (campaign.intro_video_path) {
+          try {
+            await fs.access(campaign.intro_video_path);
+            introExists = true;
+          } catch {}
+        }
+        
+        if (campaign.secondary_video_path) {
+          try {
+            await fs.access(campaign.secondary_video_path);
+            secondaryExists = true;
+          } catch {}
+        }
+        
+        return {
+          ...campaign,
+          intro_file_exists: introExists,
+          secondary_file_exists: secondaryExists
+        };
+      })
+    );
+    
+    res.json({ 
+      success: true, 
+      campaigns: campaignsWithFileStatus,
+      uploadDir: path.join(__dirname, '../../public/uploads')
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Create new campaign
 router.post('/', upload.fields([
   { name: 'introVideo', maxCount: 1 },
   { name: 'secondaryVideo', maxCount: 1 }
 ]), async (req, res) => {
   try {
+    console.log('📝 Creating new campaign...');
+    console.log('📁 Uploaded files:', req.files);
+    
     const {
       name,
       video_style,
@@ -68,6 +117,13 @@ router.post('/', upload.fields([
 
     const introVideoPath = req.files?.introVideo?.[0]?.path || null;
     const secondaryVideoPath = req.files?.secondaryVideo?.[0]?.path || null;
+
+    console.log('🎬 Intro video path:', introVideoPath);
+    console.log('🎬 Secondary video path:', secondaryVideoPath);
+
+    if (!introVideoPath) {
+      console.log('⚠️ No intro video uploaded');
+    }
 
     const result = await pool.query(`
       INSERT INTO campaigns (
@@ -101,6 +157,8 @@ router.post('/', upload.fields([
       mouse_display || 'moving',
       display_tab === 'true' || display_tab === true
     ]);
+
+    console.log('✅ Campaign created:', result.rows[0].id);
 
     res.status(201).json({
       success: true,
