@@ -255,11 +255,70 @@ export default function Generator() {
   const [activeTab, setActiveTab] = useState('create'); // 'create' or 'history'
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
+  
+  // All generated videos state
+  const [allVideos, setAllVideos] = useState([]);
+  const [allVideosTotal, setAllVideosTotal] = useState(0);
+  const [allVideosOffset, setAllVideosOffset] = useState(0);
+  const [allVideosSearch, setAllVideosSearch] = useState('');
+  const [isLoadingAllVideos, setIsLoadingAllVideos] = useState(false);
+  const [hasMoreVideos, setHasMoreVideos] = useState(true);
+  const VIDEOS_PER_PAGE = 20;
+  const MAX_VIDEOS = 100;
 
   // Load campaigns on mount
   useEffect(() => {
     fetchCampaigns();
+    fetchAllVideos(true);
   }, []);
+  
+  // Debounced search for all videos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAllVideos(true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [allVideosSearch]);
+
+  // Fetch all generated videos
+  const fetchAllVideos = async (reset = false) => {
+    setIsLoadingAllVideos(true);
+    try {
+      const offset = reset ? 0 : allVideosOffset;
+      const res = await axios.get(`${API_URL}/videos/all`, {
+        params: {
+          limit: VIDEOS_PER_PAGE,
+          offset,
+          search: allVideosSearch
+        }
+      });
+      
+      const newVideos = res.data.videos || [];
+      const total = Math.min(res.data.total || 0, MAX_VIDEOS);
+      
+      if (reset) {
+        setAllVideos(newVideos);
+        setAllVideosOffset(VIDEOS_PER_PAGE);
+      } else {
+        setAllVideos(prev => [...prev, ...newVideos]);
+        setAllVideosOffset(prev => prev + VIDEOS_PER_PAGE);
+      }
+      
+      setAllVideosTotal(total);
+      setHasMoreVideos(offset + newVideos.length < total && offset + newVideos.length < MAX_VIDEOS);
+    } catch (error) {
+      console.error('Fetch all videos error:', error);
+    } finally {
+      setIsLoadingAllVideos(false);
+    }
+  };
+
+  // Load more videos
+  const loadMoreVideos = () => {
+    if (!isLoadingAllVideos && hasMoreVideos) {
+      fetchAllVideos(false);
+    }
+  };
 
   // Fetch all campaigns
   const fetchCampaigns = async () => {
@@ -516,6 +575,7 @@ export default function Generator() {
           toast.success(`All ${completed} videos generated!`);
           fetchLeads(campaignId);
           fetchCampaigns(); // Refresh campaigns list
+          fetchAllVideos(true); // Refresh all videos list
         }
       } catch (error) {
         console.error('Status poll error:', error);
@@ -749,7 +809,175 @@ export default function Generator() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-x-hidden">
-        {/* Campaign History Panel - Always visible when there are campaigns */}
+        {/* Generated Videos Panel - Always visible */}
+        <div className="mb-8 glass rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Video className="w-5 h-5 text-primary-400" />
+              Generated Videos
+              <span className="text-sm font-normal text-gray-400">
+                ({allVideosTotal} total)
+              </span>
+            </h2>
+            <div className="flex items-center gap-3">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={allVideosSearch}
+                  onChange={(e) => setAllVideosSearch(e.target.value)}
+                  placeholder="Search videos..."
+                  className="input-field pl-9 py-2 w-64"
+                />
+                {allVideosSearch && (
+                  <button
+                    onClick={() => setAllVideosSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={() => fetchAllVideos(true)} 
+                className="btn-secondary text-sm"
+                disabled={isLoadingAllVideos}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingAllVideos ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+          
+          {allVideos.length > 0 ? (
+            <>
+              <div className="table-container max-h-96 overflow-y-auto">
+                <table className="data-table">
+                  <thead className="sticky top-0 bg-gray-800/95 backdrop-blur z-10">
+                    <tr>
+                      <th>#</th>
+                      <th>Campaign</th>
+                      <th>Website</th>
+                      <th>Name</th>
+                      <th>Company</th>
+                      <th>Views</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allVideos.map((video, i) => (
+                      <tr key={video.id}>
+                        <td className="text-gray-400">{i + 1}</td>
+                        <td className="max-w-[120px] truncate">
+                          <span className="text-primary-400">{video.campaign_name}</span>
+                        </td>
+                        <td className="max-w-[180px] truncate">
+                          <a 
+                            href={video.website_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-primary-400 hover:underline"
+                          >
+                            {video.website_url}
+                          </a>
+                        </td>
+                        <td>{video.first_name}</td>
+                        <td>{video.company_name}</td>
+                        <td>{video.views || 0}</td>
+                        <td className="text-gray-400 text-xs">
+                          {new Date(video.created_at).toLocaleDateString()}
+                        </td>
+                        <td>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => copyLink(video.unique_slug)}
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Copy Link"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <a
+                              href={`/v/${video.unique_slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Open Page"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              onClick={() => downloadVideo(video.unique_slug, video.first_name || video.company_name)}
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Download Video"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <a
+                              href={`/api/videos/preview/${video.unique_slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                              title="Preview Video"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Load More Button */}
+              {hasMoreVideos && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={loadMoreVideos}
+                    disabled={isLoadingAllVideos}
+                    className="btn-secondary"
+                  >
+                    {isLoadingAllVideos ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 mr-2" />
+                        Load More ({Math.min(allVideosTotal - allVideos.length, VIDEOS_PER_PAGE)} more)
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+              
+              {/* Showing count */}
+              <div className="mt-3 text-center text-sm text-gray-400">
+                Showing {allVideos.length} of {allVideosTotal} videos
+                {allVideosTotal >= MAX_VIDEOS && ` (limited to ${MAX_VIDEOS})`}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-gray-400">
+              <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              {isLoadingAllVideos ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <p>Loading videos...</p>
+                </div>
+              ) : allVideosSearch ? (
+                <p>No videos found matching "{allVideosSearch}"</p>
+              ) : (
+                <p>No videos generated yet</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Campaign History Panel - Below Generated Videos */}
         {campaigns.length > 0 && (
           <div className="mb-8 glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1496,124 +1724,6 @@ export default function Generator() {
               </div>
             )}
           </div>
-        )}
-
-        {/* Generated Videos Section - Shows when videos exist in current campaign */}
-        {activeTab === 'create' && leads.length > 0 && leads.some(l => l.unique_slug) && (
-          <section className="mt-8 glass rounded-2xl p-6 animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold">Generated Videos</h2>
-              <div className="flex gap-3">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search..."
-                    className="input-field pl-9 py-2 w-48"
-                  />
-                </div>
-                <button 
-                  onClick={() => campaign && fetchLeads(campaign.id)} 
-                  className="btn-secondary flex items-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Refresh
-                </button>
-                <button 
-                  onClick={downloadAllVideos} 
-                  className="btn-secondary flex items-center gap-2"
-                >
-                  <Package className="w-4 h-4" />
-                  Download All
-                </button>
-                <button 
-                  onClick={() => handleExport()} 
-                  className="btn-primary flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Export CSV
-                </button>
-              </div>
-            </div>
-            
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Website</th>
-                    <th>Name</th>
-                    <th>Company</th>
-                    <th>Status</th>
-                    <th>Views</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLeads.filter(l => l.unique_slug || l.status).map((lead, i) => (
-                    <tr key={lead.id}>
-                      <td className="text-gray-400">{i + 1}</td>
-                      <td className="max-w-[200px] truncate">
-                        <a href={lead.website_url} target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline">
-                          {lead.website_url}
-                        </a>
-                      </td>
-                      <td>{lead.first_name}</td>
-                      <td>{lead.company_name}</td>
-                      <td>
-                        {lead.status === 'completed' && <span className="badge badge-success">Complete</span>}
-                        {lead.status === 'processing' && <span className="badge badge-warning">Processing</span>}
-                        {lead.status === 'pending' && <span className="badge badge-info">Pending</span>}
-                        {lead.status === 'failed' && <span className="badge badge-error">Failed</span>}
-                      </td>
-                      <td>{lead.views || 0}</td>
-                      <td>
-                        {lead.unique_slug && lead.status === 'completed' && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => copyLink(lead.unique_slug)}
-                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Copy Link"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <a
-                              href={`/v/${lead.unique_slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Open Page"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                            <button
-                              onClick={() => downloadVideo(lead.unique_slug, lead.first_name || lead.company_name)}
-                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Download Video"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <a
-                              href={`/api/videos/preview/${lead.unique_slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Preview Video"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </a>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
         )}
       </main>
     </div>

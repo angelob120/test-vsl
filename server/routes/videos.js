@@ -211,6 +211,82 @@ async function processVideoJob(processor, job) {
   }
 }
 
+// Get all generated videos with pagination and search
+router.get('/all', async (req, res) => {
+  try {
+    const { limit = 20, offset = 0, search = '' } = req.query;
+    
+    let query = `
+      SELECT 
+        gv.*,
+        l.first_name,
+        l.last_name,
+        l.company_name,
+        l.website_url,
+        l.email,
+        c.name as campaign_name
+      FROM generated_videos gv
+      JOIN leads l ON gv.lead_id = l.id
+      JOIN campaigns c ON gv.campaign_id = c.id
+      WHERE gv.status = 'completed'
+    `;
+    
+    const queryParams = [];
+    let paramIndex = 1;
+    
+    if (search) {
+      query += ` AND (
+        LOWER(l.website_url) LIKE LOWER($${paramIndex}) OR
+        LOWER(l.first_name) LIKE LOWER($${paramIndex}) OR
+        LOWER(l.last_name) LIKE LOWER($${paramIndex}) OR
+        LOWER(l.company_name) LIKE LOWER($${paramIndex}) OR
+        LOWER(l.email) LIKE LOWER($${paramIndex}) OR
+        LOWER(c.name) LIKE LOWER($${paramIndex})
+      )`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY gv.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(parseInt(limit), parseInt(offset));
+    
+    const result = await pool.query(query, queryParams);
+    
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM generated_videos gv
+      JOIN leads l ON gv.lead_id = l.id
+      JOIN campaigns c ON gv.campaign_id = c.id
+      WHERE gv.status = 'completed'
+    `;
+    
+    if (search) {
+      countQuery += ` AND (
+        LOWER(l.website_url) LIKE LOWER($1) OR
+        LOWER(l.first_name) LIKE LOWER($1) OR
+        LOWER(l.last_name) LIKE LOWER($1) OR
+        LOWER(l.company_name) LIKE LOWER($1) OR
+        LOWER(l.email) LIKE LOWER($1) OR
+        LOWER(c.name) LIKE LOWER($1)
+      )`;
+    }
+    
+    const countResult = await pool.query(countQuery, search ? [`%${search}%`] : []);
+    
+    res.json({
+      success: true,
+      videos: result.rows,
+      total: parseInt(countResult.rows[0].total),
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Get all videos error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Get processing status
 router.get('/status/:campaignId', async (req, res) => {
   try {
