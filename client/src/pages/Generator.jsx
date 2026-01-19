@@ -1494,7 +1494,7 @@ export default function Generator() {
                   type="text"
                   value={allVideosSearch}
                   onChange={(e) => setAllVideosSearch(e.target.value)}
-                  placeholder="Search videos..."
+                  placeholder=""
                   className="input-field pl-9 py-2 w-64"
                 />
                 {allVideosSearch && (
