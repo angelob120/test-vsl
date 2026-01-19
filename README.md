@@ -1,5 +1,39 @@
 # Mass VSL Generator
 
+## 🚨 IMPORTANT: Railway Volume Setup for Persistent Storage
+
+Your videos will be **deleted when the container restarts** unless you set up a Railway Volume. Follow these steps:
+
+### Step 1: Add a Volume to Your Service
+
+1. Go to your Railway project dashboard
+2. Click on your **test-vsl** service
+3. Go to **Settings** tab
+4. Scroll down to **Volumes** section
+5. Click **"+ Add Volume"**
+6. Set **Mount Path**: `/data`
+7. Set **Size**: Start with 5GB (can increase later)
+8. Click **Save**
+
+### Step 2: Redeploy Your Service
+
+After adding the volume, Railway will automatically redeploy your service. The volume will persist all videos across restarts.
+
+### Step 3: Verify It's Working
+
+After deployment, check the logs for these messages:
+```
+📂 Initializing storage...
+   Volume path: /data
+   Base path: /data
+   Production: true
+   ✅ Volume write test passed
+```
+
+If you see `⚠️ Volume write test failed!`, the volume isn't mounted correctly.
+
+---
+
 Create personalized Video Sales Letters at scale. Upload your video, import leads, and generate unique landing pages for each prospect.
 
 ![Mass VSL Generator](https://img.shields.io/badge/Status-Production--Ready-brightgreen)

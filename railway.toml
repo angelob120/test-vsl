@@ -1,0 +1,25 @@
+# Railway Configuration
+# Documentation: https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Increase start timeout for video processing
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# IMPORTANT: You must manually add a volume in Railway Dashboard
+# 1. Go to Service Settings > Volumes
+# 2. Click "Add Volume"
+# 3. Set Mount Path to: /data
+# 4. Set Size to: 5GB (or more)
+#
+# The volume configuration below documents the expected setup:
+# [[mounts]]
+# source = "videos-volume"
+# destination = "/data"
