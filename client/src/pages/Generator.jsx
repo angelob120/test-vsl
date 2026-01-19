@@ -1619,69 +1619,6 @@ export default function Generator() {
             </div>
           )}
         </div>
-
-        {/* Your Campaigns Panel - At the bottom */}
-        {campaigns.length > 0 && (
-          <div className="mt-8 glass rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FolderOpen className="w-5 h-5 text-primary-400" />
-                Your Campaigns
-              </h2>
-              <button onClick={fetchCampaigns} className="btn-secondary text-sm">
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingCampaigns ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {campaigns.slice(0, 8).map((camp) => (
-                <div
-                  key={camp.id}
-                  onClick={() => selectCampaign(camp)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
-                    selectedCampaign?.id === camp.id
-                      ? 'border-primary-500 bg-primary-500/10'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-medium truncate flex-1">{camp.name}</h3>
-                    <button
-                      onClick={(e) => deleteCampaign(camp.id, e)}
-                      className="p-1 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {camp.lead_count || 0}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Video className="w-3 h-3" />
-                      {camp.video_count || 0}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(camp.created_at).toLocaleDateString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            {campaigns.length > 8 && (
-              <button
-                onClick={() => setActiveTab('history')}
-                className="mt-4 text-sm text-primary-400 hover:text-primary-300"
-              >
-                View all {campaigns.length} campaigns →
-              </button>
-            )}
-          </div>
-        )}
       </main>
     </div>
   );
