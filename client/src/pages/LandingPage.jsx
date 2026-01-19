@@ -318,12 +318,6 @@ export default function LandingPage() {
           </p>
         )}
 
-        {/* Footer */}
-        <footer className="text-center mt-12 pt-8 border-t border-gray-800 text-gray-500">
-          <p className="text-sm">
-            Powered by <span className="font-semibold text-primary-500">Mass VSL Generator</span>
-          </p>
-        </footer>
       </div>
     </div>
   );
