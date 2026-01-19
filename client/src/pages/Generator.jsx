@@ -259,11 +259,8 @@ export default function Generator() {
   // All generated videos state
   const [allVideos, setAllVideos] = useState([]);
   const [allVideosTotal, setAllVideosTotal] = useState(0);
-  const [allVideosOffset, setAllVideosOffset] = useState(0);
   const [allVideosSearch, setAllVideosSearch] = useState('');
   const [isLoadingAllVideos, setIsLoadingAllVideos] = useState(false);
-  const [hasMoreVideos, setHasMoreVideos] = useState(true);
-  const VIDEOS_PER_PAGE = 20;
   const MAX_VIDEOS = 100;
 
   // Load campaigns on mount
@@ -284,11 +281,10 @@ export default function Generator() {
   const fetchAllVideos = async (reset = false) => {
     setIsLoadingAllVideos(true);
     try {
-      const offset = reset ? 0 : allVideosOffset;
       const res = await axios.get(`${API_URL}/videos/all`, {
         params: {
-          limit: VIDEOS_PER_PAGE,
-          offset,
+          limit: MAX_VIDEOS,
+          offset: 0,
           search: allVideosSearch
         }
       });
@@ -296,27 +292,12 @@ export default function Generator() {
       const newVideos = res.data.videos || [];
       const total = Math.min(res.data.total || 0, MAX_VIDEOS);
       
-      if (reset) {
-        setAllVideos(newVideos);
-        setAllVideosOffset(VIDEOS_PER_PAGE);
-      } else {
-        setAllVideos(prev => [...prev, ...newVideos]);
-        setAllVideosOffset(prev => prev + VIDEOS_PER_PAGE);
-      }
-      
+      setAllVideos(newVideos);
       setAllVideosTotal(total);
-      setHasMoreVideos(offset + newVideos.length < total && offset + newVideos.length < MAX_VIDEOS);
     } catch (error) {
       console.error('Fetch all videos error:', error);
     } finally {
       setIsLoadingAllVideos(false);
-    }
-  };
-
-  // Load more videos
-  const loadMoreVideos = () => {
-    if (!isLoadingAllVideos && hasMoreVideos) {
-      fetchAllVideos(false);
     }
   };
 
@@ -1617,33 +1598,9 @@ export default function Generator() {
                 </table>
               </div>
               
-              {/* Load More Button */}
-              {hasMoreVideos && (
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={loadMoreVideos}
-                    disabled={isLoadingAllVideos}
-                    className="btn-secondary"
-                  >
-                    {isLoadingAllVideos ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4 mr-2" />
-                        Load More ({Math.min(allVideosTotal - allVideos.length, VIDEOS_PER_PAGE)} more)
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-              
-              {/* Showing count */}
+              {/* Display count */}
               <div className="mt-3 text-center text-sm text-gray-400">
                 Showing {allVideos.length} of {allVideosTotal} videos
-                {allVideosTotal >= MAX_VIDEOS && ` (limited to ${MAX_VIDEOS})`}
               </div>
             </>
           ) : (
