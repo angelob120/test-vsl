@@ -149,7 +149,7 @@ export default function LandingPage() {
       <div className="relative z-10 max-w-4xl mx-auto px-4 py-8 md:py-16">
         {/* Header */}
         <header className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold font-display mb-2 text-white">
+          <h1 className="text-3xl md:text-4xl font-bold font-display mb-2 text-primary-400">
             👇 A video for {data?.company_name || 'You'}  👇
           </h1>
         </header>
@@ -298,7 +298,7 @@ export default function LandingPage() {
 
         {/* Video Caption */}
         <div className="text-center mt-4 mb-8">
-          <p className="text-xl text-primary-400">
+          <p className="text-xl text-white">
             ☝️ Here is the video ☝️
           </p>
         </div>
