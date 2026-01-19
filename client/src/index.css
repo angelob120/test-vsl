@@ -264,3 +264,19 @@ body {
 .tooltip:hover::after {
   @apply opacity-100 visible;
 }
+
+/* Toast animation */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}

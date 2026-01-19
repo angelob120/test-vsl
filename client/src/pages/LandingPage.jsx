@@ -18,6 +18,7 @@ export default function LandingPage() {
   const [showControls, setShowControls] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     fetchVideoData();
@@ -159,7 +160,8 @@ export default function LandingPage() {
           <button
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);
-              alert('Link copied to clipboard!');
+              setShowToast(true);
+              setTimeout(() => setShowToast(false), 3000);
             }}
             className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-colors"
             title="Copy link"
@@ -169,6 +171,18 @@ export default function LandingPage() {
             </svg>
           </button>
         </div>
+
+        {/* Toast Notification */}
+        {showToast && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+            <div className="bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
+              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Link copied to clipboard!
+            </div>
+          </div>
+        )}
 
         {/* Video Player */}
         <div 
