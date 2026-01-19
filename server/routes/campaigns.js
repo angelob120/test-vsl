@@ -11,31 +11,59 @@ const __dirname = path.dirname(__filename);
 
 const router = Router();
 
+// Ensure upload directory exists on startup
+const uploadDir = path.join(__dirname, '../../public/uploads');
+fs.mkdir(uploadDir, { recursive: true }).catch(console.error);
+console.log('📁 Upload directory:', uploadDir);
+
 // Configure multer for video uploads
 const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../public/uploads');
-    await fs.mkdir(uploadDir, { recursive: true });
+  destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}-${nanoid(8)}${path.extname(file.originalname)}`;
+    console.log('📤 Saving file as:', uniqueName);
     cb(null, uniqueName);
   }
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  limits: { 
+    fileSize: 100 * 1024 * 1024, // 100MB limit
+    fieldSize: 100 * 1024 * 1024
+  },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+    console.log('📥 Receiving file:', file.originalname, file.mimetype);
+    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only MP4, MOV, and WebM are allowed.'));
+      cb(new Error(`Invalid file type: ${file.mimetype}. Only MP4, MOV, and WebM are allowed.`));
     }
   }
 });
+
+// Error handling middleware for multer
+const handleUpload = (req, res, next) => {
+  upload.fields([
+    { name: 'introVideo', maxCount: 1 },
+    { name: 'secondaryVideo', maxCount: 1 }
+  ])(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      console.error('Multer error:', err);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, error: 'File too large. Maximum size is 100MB.' });
+      }
+      return res.status(400).json({ success: false, error: `Upload error: ${err.message}` });
+    } else if (err) {
+      console.error('Upload error:', err);
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    next();
+  });
+};
 
 // Debug endpoint - list all campaigns with paths
 router.get('/debug', async (req, res) => {
@@ -46,6 +74,14 @@ router.get('/debug', async (req, res) => {
       ORDER BY created_at DESC 
       LIMIT 10
     `);
+    
+    // List files in upload directory
+    let uploadFiles = [];
+    try {
+      uploadFiles = await fs.readdir(uploadDir);
+    } catch (e) {
+      uploadFiles = ['Error reading directory: ' + e.message];
+    }
     
     // Check if files exist for each campaign
     const campaignsWithFileStatus = await Promise.all(
@@ -78,21 +114,55 @@ router.get('/debug', async (req, res) => {
     res.json({ 
       success: true, 
       campaigns: campaignsWithFileStatus,
-      uploadDir: path.join(__dirname, '../../public/uploads')
+      uploadDir,
+      uploadFiles
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// Test upload endpoint
+router.post('/test-upload', handleUpload, async (req, res) => {
+  try {
+    console.log('🧪 Test upload received');
+    console.log('Files:', req.files);
+    
+    const introVideo = req.files?.introVideo?.[0];
+    
+    if (introVideo) {
+      // Verify file exists
+      await fs.access(introVideo.path);
+      res.json({
+        success: true,
+        message: 'File uploaded successfully',
+        file: {
+          originalName: introVideo.originalname,
+          filename: introVideo.filename,
+          path: introVideo.path,
+          size: introVideo.size,
+          mimetype: introVideo.mimetype
+        }
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'No file received',
+        body: Object.keys(req.body)
+      });
+    }
+  } catch (error) {
+    console.error('Test upload error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Create new campaign
-router.post('/', upload.fields([
-  { name: 'introVideo', maxCount: 1 },
-  { name: 'secondaryVideo', maxCount: 1 }
-]), async (req, res) => {
+router.post('/', handleUpload, async (req, res) => {
   try {
     console.log('📝 Creating new campaign...');
-    console.log('📁 Uploaded files:', req.files);
+    console.log('📁 Request files:', JSON.stringify(req.files, null, 2));
+    console.log('📋 Request body keys:', Object.keys(req.body));
     
     const {
       name,

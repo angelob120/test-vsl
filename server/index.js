@@ -23,8 +23,8 @@ console.log(`🔌 Port: ${PORT}`);
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
@@ -106,11 +106,16 @@ app.use((err, req, res, next) => {
 async function start() {
   // Start server first - Railway requires binding to 0.0.0.0
   const HOST = '0.0.0.0';
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`🚀 Server running on ${HOST}:${PORT}`);
     console.log(`📺 API available at http://localhost:${PORT}/api`);
     console.log(`🌐 App available at http://localhost:${PORT}`);
   });
+
+  // Increase timeout for large file uploads (5 minutes)
+  server.timeout = 300000;
+  server.keepAliveTimeout = 300000;
+  server.headersTimeout = 310000;
 
   // Then try database connection
   try {
