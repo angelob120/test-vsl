@@ -1225,8 +1225,8 @@ export default function Generator() {
                   {/* Title Preview */}
                   <div className={`absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent
                     ${settings.video_style === 'full_screen' ? 'hidden' : ''}`}>
-                    <p className="text-xs font-medium text-primary-400">{settings.video_title}</p>
-                    <p className="text-[10px] text-gray-300">@FirstName @CompanyName</p>
+                    <p className="text-xs font-medium text-primary-400">👇 A video for @CompanyName 👇</p>
+                    <p className="text-[10px] text-gray-300 mt-1">☝️ Here is the video ☝️</p>
                   </div>
                 </div>
 
