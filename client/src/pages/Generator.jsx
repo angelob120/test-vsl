@@ -697,7 +697,7 @@ export default function Generator() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-x-hidden w-full">
       {/* Header */}
       <header className="border-b border-white/10 bg-gray-900/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -748,7 +748,7 @@ export default function Generator() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-x-hidden">
         {/* Campaign History Panel - Always visible when there are campaigns */}
         {campaigns.length > 0 && (
           <div className="mb-8 glass rounded-2xl p-6">
@@ -815,9 +815,9 @@ export default function Generator() {
         {/* Main Content Area */}
         {activeTab === 'create' ? (
           /* Create Campaign View */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full min-w-0">
             {/* Left Panel - Configuration */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6 min-w-0">
               {/* Step 1: Upload Video */}
               <section className="glass rounded-2xl p-6 animate-fade-in">
                 <button

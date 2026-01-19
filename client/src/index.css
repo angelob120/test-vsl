@@ -13,7 +13,12 @@
   --bg-darker: #020617;
 }
 
-* {
+html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
@@ -23,6 +28,7 @@ body {
   min-height: 100vh;
   color: #e2e8f0;
   overflow-x: hidden;
+  width: 100%;
 }
 
 /* Custom scrollbar */
@@ -71,6 +77,7 @@ body {
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
 }
 
 .glass-light {
@@ -287,11 +294,11 @@ body {
 @keyframes fade-in {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-10px);
+    transform: translateY(-10px);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
