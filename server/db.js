@@ -8,9 +8,13 @@ const { Pool } = pg;
 // Use DATABASE_PUBLIC_URL for external connections, fallback to DATABASE_URL
 const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
 
+console.log('🔌 Connecting to database...');
+console.log('📍 Connection string exists:', !!connectionString);
+
 const pool = new Pool({
   connectionString,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }, // Always use SSL for Railway
+  connectionTimeoutMillis: 10000, // 10 second timeout
 });
 
 // Initialize database schema

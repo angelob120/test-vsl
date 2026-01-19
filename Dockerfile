@@ -5,7 +5,7 @@ WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm install
 COPY client/ ./
-RUN npm run build
+RUN npm run build && ls -la dist/
 
 # Production stage
 FROM node:20-slim
@@ -45,16 +45,16 @@ RUN npm install --only=production
 # Copy server code
 COPY server/ ./server/
 
-# Copy built client
+# Copy built client and verify
 COPY --from=client-builder /app/client/dist ./client/dist
+RUN echo "Client dist contents:" && ls -la ./client/dist/
 
 # Create necessary directories
 RUN mkdir -p public/uploads public/videos public/previews public/backgrounds
 
-# Expose port
-EXPOSE 8080
+# Set environment variables
+ENV PORT=3001
+ENV NODE_ENV=production
 
 # Start the server
 CMD ["npm", "start"]
-
-
