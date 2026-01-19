@@ -150,11 +150,8 @@ export default function LandingPage() {
         {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold font-display mb-2 text-white">
-            {personalize(data?.video_title || 'A video for you 👋')}
+            👇 A video for {data?.company_name || 'You'}  👇
           </h1>
-          <p className="text-2xl">
-            👇 Here is the video 👇
-          </p>
         </header>
 
         {/* Share Link Button */}
@@ -302,7 +299,7 @@ export default function LandingPage() {
         {/* Video Caption */}
         <div className="text-center mt-4 mb-8">
           <p className="text-xl text-primary-400">
-            ☝️ A video for {data?.company_name || 'You'} ☝️
+            ☝️ Here is the video ☝️
           </p>
         </div>
 
