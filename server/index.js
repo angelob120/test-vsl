@@ -7,6 +7,8 @@ import pool, { initDatabase } from './db.js';
 import campaignRoutes from './routes/campaigns.js';
 import leadRoutes from './routes/leads.js';
 import videoRoutes from './routes/videos.js';
+import { initStorage, STORAGE_PATHS } from './services/storage.js';
+import { startCleanupScheduler } from './services/cleanup.js';
 
 dotenv.config();
 
@@ -26,9 +28,9 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// Static files for uploads
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
-app.use('/videos', express.static(path.join(__dirname, '../public/videos')));
+// Static files for uploads and videos (served from persistent storage)
+app.use('/uploads', express.static(STORAGE_PATHS.uploads));
+app.use('/videos', express.static(STORAGE_PATHS.videos));
 
 // API Routes
 app.use('/api/campaigns', campaignRoutes);
@@ -104,7 +106,16 @@ app.use((err, req, res, next) => {
 
 // Initialize database and start server
 async function start() {
-  // Start server first - Railway requires binding to 0.0.0.0
+  // Initialize persistent storage first
+  try {
+    await initStorage();
+    console.log('✅ Storage initialized');
+  } catch (error) {
+    console.error('⚠️ Storage initialization failed:', error.message);
+    console.error('Videos may not persist across restarts!');
+  }
+
+  // Start server - Railway requires binding to 0.0.0.0
   const HOST = '0.0.0.0';
   const server = app.listen(PORT, HOST, () => {
     console.log(`🚀 Server running on ${HOST}:${PORT}`);
@@ -125,6 +136,9 @@ async function start() {
     // Initialize schema
     await initDatabase();
     console.log('✅ Database schema ready');
+    
+    // Start cleanup scheduler after database is ready
+    startCleanupScheduler();
   } catch (error) {
     console.error('⚠️ Database connection failed:', error.message);
     console.error('App will continue running but database features won\'t work');

@@ -3,6 +3,7 @@ import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
+import { STORAGE_PATHS } from './storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -231,7 +232,8 @@ export class VideoProcessor {
       settings
     } = config;
 
-    const tempDir = path.join(outputDir, 'temp', leadId);
+    // Use persistent temp directory
+    const tempDir = path.join(STORAGE_PATHS.temp, leadId);
     await fs.mkdir(tempDir, { recursive: true });
 
     try {
@@ -265,13 +267,13 @@ export class VideoProcessor {
 
       // Step 4: Create preview
       console.log(`📹 Creating preview...`);
-      const previewPath = path.join(outputDir, 'previews', `${leadId}_preview.mp4`);
+      const previewPath = path.join(STORAGE_PATHS.previews, `${leadId}_preview.mp4`);
       await fs.mkdir(path.dirname(previewPath), { recursive: true });
       await this.createPreview(finalVideoPath, previewPath, 8);
 
       // Step 5: Create thumbnail
       console.log(`🖼️ Creating thumbnail...`);
-      const thumbnailPath = path.join(outputDir, 'thumbnails', `${leadId}.jpg`);
+      const thumbnailPath = path.join(STORAGE_PATHS.thumbnails, `${leadId}.jpg`);
       await fs.mkdir(path.dirname(thumbnailPath), { recursive: true });
       await this.createThumbnail(finalVideoPath, thumbnailPath);
 

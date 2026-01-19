@@ -77,8 +77,22 @@ export async function initDatabase() {
         views INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '60 days'),
         CONSTRAINT unique_lead_video UNIQUE (lead_id)
       );
+      
+      -- Add expires_at column if it doesn't exist (migration)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'generated_videos' AND column_name = 'expires_at'
+        ) THEN
+          ALTER TABLE generated_videos ADD COLUMN expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '60 days');
+          -- Set expiration for existing videos
+          UPDATE generated_videos SET expires_at = created_at + INTERVAL '60 days' WHERE expires_at IS NULL;
+        END IF;
+      END $$;
 
       -- Video analytics table
       CREATE TABLE IF NOT EXISTS video_analytics (
@@ -97,6 +111,7 @@ export async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_videos_campaign ON generated_videos(campaign_id);
       CREATE INDEX IF NOT EXISTS idx_videos_slug ON generated_videos(unique_slug);
       CREATE INDEX IF NOT EXISTS idx_analytics_video ON video_analytics(video_id);
+      CREATE INDEX IF NOT EXISTS idx_videos_expires ON generated_videos(expires_at);
       
       -- Migration: Add unique constraint on lead_id if it doesn't exist
       -- This handles existing databases that were created without the constraint

@@ -86,6 +86,12 @@ NODE_ENV=production
 
 # App URL (for generating shareable links)
 APP_URL=https://your-domain.com
+
+# Storage (Railway Volume)
+VOLUME_PATH=/data
+
+# Video retention (auto-delete after X days)
+VIDEO_RETENTION_DAYS=60
 ```
 
 ## API Endpoints
@@ -110,17 +116,59 @@ APP_URL=https://your-domain.com
 - `GET /api/videos/file/:slug` - Stream video file
 - `GET /api/videos/preview/:slug` - Stream preview
 - `GET /api/videos/thumbnail/:slug` - Get thumbnail
+- `DELETE /api/videos/:slug` - Delete a video
+- `GET /api/videos/storage/stats` - Get storage statistics
+- `POST /api/videos/storage/cleanup` - Trigger manual cleanup
 
 ## Deployment to Railway
+
+### 1. Basic Setup
 
 1. Push code to GitHub
 2. Connect Railway to your repo
 3. Add PostgreSQL plugin
-4. Set environment variables:
-   - `DATABASE_URL` (auto-set by Railway)
-   - `APP_URL` = your Railway domain
-   - `NODE_ENV` = production
-5. Deploy!
+
+### 2. Add Railway Volume (IMPORTANT!)
+
+Videos and uploads need persistent storage to survive container restarts:
+
+1. Go to your service settings in Railway
+2. Click **"Add Volume"**
+3. Set mount path to: `/data`
+4. Set size: Start with **5GB** (increase as needed)
+5. Click "Create"
+
+Without a volume, all videos will be lost on each deployment!
+
+### 3. Set Environment Variables
+
+- `DATABASE_URL` (auto-set by Railway)
+- `APP_URL` = your Railway domain (e.g., `https://your-app.up.railway.app`)
+- `NODE_ENV` = `production`
+- `VOLUME_PATH` = `/data` (optional, this is the default)
+- `VIDEO_RETENTION_DAYS` = `60` (optional, videos auto-delete after this many days)
+
+### 4. Deploy!
+
+Railway will automatically build and deploy your app.
+
+## Video Storage & Retention
+
+- **Persistent Storage**: Videos are stored on a Railway Volume at `/data`
+- **Auto-Cleanup**: Videos automatically delete after 60 days (configurable via `VIDEO_RETENTION_DAYS`)
+- **Storage Stats**: Check storage usage at `GET /api/videos/storage/stats`
+- **Manual Cleanup**: Trigger cleanup at `POST /api/videos/storage/cleanup`
+
+### Storage Structure
+
+```
+/data/
+├── uploads/           # Uploaded intro/secondary videos
+├── videos/            # Generated VSL videos
+│   ├── previews/      # 8-second preview clips
+│   └── thumbnails/    # Video thumbnails
+└── temp/              # Temporary processing files
+```
 
 ## CSV Format
 

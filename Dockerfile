@@ -49,12 +49,19 @@ COPY server/ ./server/
 COPY --from=client-builder /app/client/dist ./client/dist
 RUN echo "Client dist contents:" && ls -la ./client/dist/
 
-# Create necessary directories
+# Create directories for persistent storage
+# Note: /data will be mounted as a Railway Volume
+# These directories are created as fallback and for local development
+RUN mkdir -p /data/uploads /data/videos /data/videos/previews /data/videos/thumbnails /data/temp
 RUN mkdir -p public/uploads public/videos public/previews public/backgrounds
+
+# Set proper permissions for the data directory
+RUN chmod -R 755 /data
 
 # Set environment variables
 ENV PORT=3001
 ENV NODE_ENV=production
+ENV VOLUME_PATH=/data
 
 # Start the server
 CMD ["npm", "start"]

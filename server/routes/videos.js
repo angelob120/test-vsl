@@ -5,11 +5,22 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import pool from '../db.js';
 import VideoProcessor from '../services/videoProcessor.js';
+import { 
+  STORAGE_PATHS, 
+  getExpirationDate, 
+  deleteVideoFiles,
+  getStorageStats,
+  RETENTION_DAYS 
+} from '../services/storage.js';
+import { getCleanupStats, cleanupExpiredVideos } from '../services/cleanup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = Router();
+
+// Use persistent storage path for videos
+const outputDir = STORAGE_PATHS.videos;
 
 // Queue for processing videos
 let processingQueue = [];
@@ -128,25 +139,27 @@ async function processQueue() {
 async function processVideoJob(processor, job) {
   const { leadId, campaignId, campaign, lead } = job;
   const uniqueSlug = nanoid(11);
-  const outputDir = path.join(__dirname, '../../public/videos');
+  const expiresAt = getExpirationDate();
 
   try {
-    // Create pending video record (upsert - one video per lead)
+    // Create pending video record with expiration (upsert - one video per lead)
     await pool.query(`
-      INSERT INTO generated_videos (lead_id, campaign_id, unique_slug, status)
-      VALUES ($1, $2, $3, 'processing')
+      INSERT INTO generated_videos (lead_id, campaign_id, unique_slug, status, expires_at)
+      VALUES ($1, $2, $3, 'processing', $4)
       ON CONFLICT ON CONSTRAINT unique_lead_video 
       DO UPDATE SET 
         status = 'processing', 
         unique_slug = EXCLUDED.unique_slug,
         campaign_id = EXCLUDED.campaign_id,
         error_message = NULL,
+        expires_at = $4,
         updated_at = CURRENT_TIMESTAMP
-    `, [leadId, campaignId, uniqueSlug]);
+    `, [leadId, campaignId, uniqueSlug, expiresAt]);
 
     console.log(`🎬 Processing video for lead ${leadId}: ${lead.website_url}`);
+    console.log(`   Expires: ${expiresAt.toISOString()}`);
 
-    // Generate the video
+    // Generate the video using persistent storage
     const result = await processor.generateVSL({
       leadId,
       websiteUrl: lead.website_url,
@@ -184,14 +197,14 @@ async function processVideoJob(processor, job) {
     // Try to update the record with failure status
     try {
       await pool.query(`
-        INSERT INTO generated_videos (lead_id, campaign_id, unique_slug, status, error_message)
-        VALUES ($1, $2, $3, 'failed', $4)
+        INSERT INTO generated_videos (lead_id, campaign_id, unique_slug, status, error_message, expires_at)
+        VALUES ($1, $2, $3, 'failed', $4, $5)
         ON CONFLICT ON CONSTRAINT unique_lead_video 
         DO UPDATE SET 
           status = 'failed',
           error_message = $4,
           updated_at = CURRENT_TIMESTAMP
-      `, [leadId, campaignId, uniqueSlug, error.message]);
+      `, [leadId, campaignId, uniqueSlug, error.message, expiresAt]);
     } catch (updateError) {
       console.error(`❌ Failed to update error status for lead ${leadId}:`, updateError.message);
     }
@@ -361,6 +374,73 @@ router.get('/landing/:slug', async (req, res) => {
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     console.error('Get landing data error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get storage statistics
+router.get('/storage/stats', async (req, res) => {
+  try {
+    const storageStats = await getStorageStats();
+    const cleanupStats = await getCleanupStats();
+    
+    res.json({
+      success: true,
+      storage: storageStats,
+      cleanup: cleanupStats,
+      retention: {
+        days: RETENTION_DAYS,
+        description: `Videos auto-delete after ${RETENTION_DAYS} days`
+      }
+    });
+  } catch (error) {
+    console.error('Get storage stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Manually trigger cleanup (admin endpoint)
+router.post('/storage/cleanup', async (req, res) => {
+  try {
+    console.log('🧹 Manual cleanup triggered');
+    const result = await cleanupExpiredVideos();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Manual cleanup error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete a specific video
+router.delete('/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    
+    // Get video record
+    const result = await pool.query(
+      'SELECT * FROM generated_videos WHERE unique_slug = $1',
+      [slug]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+    
+    const video = result.rows[0];
+    
+    // Delete files
+    const deletedFiles = await deleteVideoFiles(video);
+    
+    // Delete from database
+    await pool.query('DELETE FROM generated_videos WHERE id = $1', [video.id]);
+    
+    res.json({ 
+      success: true, 
+      message: 'Video deleted',
+      deletedFiles 
+    });
+  } catch (error) {
+    console.error('Delete video error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

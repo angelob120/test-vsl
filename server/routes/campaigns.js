@@ -5,16 +5,16 @@ import { nanoid } from 'nanoid';
 import pool from '../db.js';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { STORAGE_PATHS, getStorageStats } from '../services/storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = Router();
 
-// Ensure upload directory exists on startup
-const uploadDir = path.join(__dirname, '../../public/uploads');
-fs.mkdir(uploadDir, { recursive: true }).catch(console.error);
-console.log('📁 Upload directory:', uploadDir);
+// Use persistent storage path for uploads
+const uploadDir = STORAGE_PATHS.uploads;
+console.log('📁 Upload directory (persistent):', uploadDir);
 
 // Configure multer for video uploads
 const storage = multer.diskStorage({
@@ -111,11 +111,15 @@ router.get('/debug', async (req, res) => {
       })
     );
     
+    // Get storage stats
+    const storageStats = await getStorageStats();
+    
     res.json({ 
       success: true, 
       campaigns: campaignsWithFileStatus,
       uploadDir,
-      uploadFiles
+      uploadFiles,
+      storage: storageStats
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
