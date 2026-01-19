@@ -8,10 +8,198 @@ import {
   User, Link, Calendar, Palette, Moon, Sun, MousePointer, ArrowDown,
   Circle, Square, Maximize, Monitor, RefreshCw, Check, X, Copy,
   ExternalLink, Loader2, Sparkles, Film, Plus, Search, FolderOpen,
-  Clock, ChevronLeft, FileDown, Package
+  Clock, ChevronLeft, FileDown, Package, Pause, SkipBack, SkipForward,
+  RotateCcw, Volume2, VolumeX
 } from 'lucide-react';
 
 const API_URL = '/api';
+
+// Custom Video Player Component
+const VideoPlayer = ({ src, className = '', maxHeight = 'max-h-48' }) => {
+  const videoRef = React.useRef(null);
+  const progressRef = React.useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+
+  const formatTime = (time) => {
+    if (isNaN(time)) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const togglePlay = (e) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  const handleEnded = () => {
+    setIsPlaying(false);
+  };
+
+  const skip = (seconds, e) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.currentTime + seconds, duration));
+    }
+  };
+
+  const rewind = (e) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  const toggleMute = (e) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const handleProgressClick = (e) => {
+    e.stopPropagation();
+    if (progressRef.current && videoRef.current) {
+      const rect = progressRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const percentage = clickX / rect.width;
+      videoRef.current.currentTime = percentage * duration;
+    }
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div 
+      className={`relative group ${className}`}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(true)}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        className={`w-full ${maxHeight} object-contain rounded-lg`}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={handleEnded}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onClick={togglePlay}
+      />
+      
+      {/* Controls Overlay */}
+      <div 
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 rounded-b-lg transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Progress Bar */}
+        <div 
+          ref={progressRef}
+          className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer mb-2 group/progress"
+          onClick={handleProgressClick}
+        >
+          <div 
+            className="h-full bg-primary-500 rounded-full relative"
+            style={{ width: `${progress}%` }}
+          >
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity shadow-lg" />
+          </div>
+        </div>
+
+        {/* Control Buttons */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            {/* Rewind to start */}
+            <button
+              onClick={rewind}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+              title="Restart"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            
+            {/* Skip back 10s */}
+            <button
+              onClick={(e) => skip(-10, e)}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors relative"
+              title="Skip back 10s"
+            >
+              <SkipBack className="w-4 h-4" />
+              <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold">10</span>
+            </button>
+            
+            {/* Play/Pause */}
+            <button
+              onClick={togglePlay}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </button>
+            
+            {/* Skip forward 10s */}
+            <button
+              onClick={(e) => skip(10, e)}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors relative"
+              title="Skip forward 10s"
+            >
+              <SkipForward className="w-4 h-4" />
+              <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold">10</span>
+            </button>
+            
+            {/* Mute */}
+            <button
+              onClick={toggleMute}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+          </div>
+          
+          {/* Time Display */}
+          <div className="text-xs text-white/80 font-mono">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </div>
+        </div>
+      </div>
+      
+      {/* Center Play Button (when paused) */}
+      {!isPlaying && (
+        <button
+          onClick={togglePlay}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-4 bg-black/50 hover:bg-black/70 rounded-full transition-all transform hover:scale-110"
+        >
+          <Play className="w-8 h-8 text-white" />
+        </button>
+      )}
+    </div>
+  );
+};
 
 export default function Generator() {
   // Campaign state
@@ -653,11 +841,10 @@ export default function Generator() {
                     >
                       <input {...getIntroInputProps()} />
                       {introVideoPreview ? (
-                        <div className="relative w-full">
-                          <video
+                        <div className="relative w-full" onClick={(e) => e.stopPropagation()}>
+                          <VideoPlayer
                             src={introVideoPreview}
-                            className="w-full max-h-48 object-contain rounded-lg"
-                            controls
+                            maxHeight="max-h-48"
                           />
                           <button
                             onClick={(e) => {
@@ -665,7 +852,7 @@ export default function Generator() {
                               setIntroVideo(null);
                               setIntroVideoPreview(null);
                             }}
-                            className="absolute top-2 right-2 p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors"
+                            className="absolute top-2 right-2 p-2 bg-red-500 rounded-full hover:bg-red-600 transition-colors z-10"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -700,11 +887,10 @@ export default function Generator() {
                       >
                         <input {...getSecondaryInputProps()} />
                         {secondaryVideoPreview ? (
-                          <div className="relative w-full">
-                            <video
+                          <div className="relative w-full" onClick={(e) => e.stopPropagation()}>
+                            <VideoPlayer
                               src={secondaryVideoPreview}
-                              className="w-full max-h-32 object-contain rounded-lg"
-                              controls
+                              maxHeight="max-h-32"
                             />
                             <button
                               onClick={(e) => {
@@ -712,7 +898,7 @@ export default function Generator() {
                                 setSecondaryVideo(null);
                                 setSecondaryVideoPreview(null);
                               }}
-                              className="absolute top-2 right-2 p-1 bg-red-500 rounded-full"
+                              className="absolute top-2 right-2 p-1 bg-red-500 rounded-full z-10"
                             >
                               <X className="w-3 h-3" />
                             </button>
