@@ -5,8 +5,11 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// Use DATABASE_PUBLIC_URL for external connections, fallback to DATABASE_URL
+const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 

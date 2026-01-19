@@ -3,7 +3,7 @@ FROM node:20-slim AS client-builder
 
 WORKDIR /app/client
 COPY client/package*.json ./
-RUN npm ci
+RUN npm install
 COPY client/ ./
 RUN npm run build
 
@@ -40,7 +40,7 @@ WORKDIR /app
 
 # Copy server package files and install
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --only=production
 
 # Copy server code
 COPY server/ ./server/
