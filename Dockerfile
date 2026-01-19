@@ -52,7 +52,7 @@ COPY --from=client-builder /app/client/dist ./client/dist
 RUN mkdir -p public/uploads public/videos public/previews public/backgrounds
 
 # Expose port
-EXPOSE 3001
+EXPOSE 8080
 
 # Start the server
 CMD ["npm", "start"]
