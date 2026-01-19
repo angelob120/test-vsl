@@ -1512,7 +1512,7 @@ export default function Generator() {
                 disabled={isLoadingAllVideos}
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingAllVideos ? 'animate-spin' : ''}`} />
-                Refresh
+              
               </button>
             </div>
           </div>
