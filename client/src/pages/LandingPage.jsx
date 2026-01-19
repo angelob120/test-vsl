@@ -152,11 +152,26 @@ export default function LandingPage() {
           <h1 className="text-3xl md:text-4xl font-bold font-display mb-2 text-white">
             {personalize(data?.video_title || 'A video for you 👋')}
           </h1>
-          <p className="text-xl text-primary-400">
-            {data?.first_name && <span className="font-semibold">@{data.first_name}</span>}
-            {data?.company_name && <span className="font-semibold ml-2">@{data.company_name}</span>}
+          <p className="text-2xl">
+            👇 Here is the video 👇
           </p>
         </header>
+
+        {/* Share Link Button */}
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              alert('Link copied to clipboard!');
+            }}
+            className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-colors"
+            title="Copy link"
+          >
+            <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </button>
+        </div>
 
         {/* Video Player */}
         <div 
@@ -282,6 +297,13 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Video Caption */}
+        <div className="text-center mt-4 mb-8">
+          <p className="text-xl text-primary-400">
+            ☝️ A video for {data?.company_name || 'You'} ☝️
+          </p>
         </div>
 
         {/* CTA Button */}
