@@ -224,20 +224,21 @@ export class VideoProcessor {
         // BUBBLE MODE (small_bubble or big_bubble):
         // - Bubble stays the SAME SIZE and SHAPE throughout the entire video
         // - NO transitions, NO fullscreen
+        // - Video is ALWAYS VISIBLE from the start (no delay)
         // - Video plays until the uploaded video completes
         // - Background freezes on last frame when scrolling ends
         
         if (shape === 'circle') {
-          // Circle mask for bubble - stays circle the ENTIRE time
+          // Circle mask for bubble - stays circle the ENTIRE time, visible from t=0
           filterComplex = [
             `[1:v]scale=${overlaySize.width}:${overlaySize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'[ov];`,
-            `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
+            `[0:v][ov]overlay=${posX}:${posY}[outv]`
           ].join('');
         } else {
-          // Square/rectangle overlay - stays square the ENTIRE time
+          // Square/rectangle overlay - stays square the ENTIRE time, visible from t=0
           filterComplex = [
             `[1:v]scale=${overlaySize.width}:${overlaySize.height}[ov];`,
-            `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
+            `[0:v][ov]overlay=${posX}:${posY}[outv]`
           ].join('');
         }
         

@@ -1115,29 +1115,31 @@ export default function Generator() {
                       </div>
                     </div>
 
-                    {/* Title & Description */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Video Title</label>
-                        <input
-                          type="text"
-                          value={settings.video_title}
-                          onChange={(e) => setSettings({ ...settings, video_title: e.target.value })}
-                          className="input-field"
-                        />
+                    {/* Title & Display Delay - Only for full_screen style */}
+                    {settings.video_style === 'full_screen' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Video Title</label>
+                          <input
+                            type="text"
+                            value={settings.video_title}
+                            onChange={(e) => setSettings({ ...settings, video_title: e.target.value })}
+                            className="input-field"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Display Delay (seconds)</label>
+                          <input
+                            type="number"
+                            value={settings.display_delay}
+                            onChange={(e) => setSettings({ ...settings, display_delay: parseInt(e.target.value) || 0 })}
+                            className="input-field"
+                            min="0"
+                            max="60"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Display Delay (seconds)</label>
-                        <input
-                          type="number"
-                          value={settings.display_delay}
-                          onChange={(e) => setSettings({ ...settings, display_delay: parseInt(e.target.value) || 0 })}
-                          className="input-field"
-                          min="0"
-                          max="60"
-                        />
-                      </div>
-                    </div>
+                    )}
 
                     {/* Fullscreen Transition Time - Only for full_screen style */}
                     {settings.video_style === 'full_screen' && (
