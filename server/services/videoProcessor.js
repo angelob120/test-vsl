@@ -212,6 +212,7 @@ export class VideoProcessor {
         // FULLSCREEN MODE WITH SMOOTH BUBBLE EXPANSION:
         // The bubble physically grows from 400x400 in corner to 1280x720 fullscreen
         // Animation duration: 0.5 seconds starting at fullscreenTransitionTime
+        // After transition: video completely covers the background (website no longer visible)
         
         const animDuration = 0.5;
         const t0 = fullscreenTransitionTime; // transition start time
@@ -262,19 +263,31 @@ export class VideoProcessor {
         const animY = `${startY}*(1-(${ease}))`;
         
         if (shape === 'circle') {
-          // Circle mask that works at any size (radius = half of smaller dimension)
-          // As bubble expands, circle expands with it
-          // When fully expanded, the circle will be large enough to mostly fill the frame
-          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),255,0)'`;
+          // Circle mask with ANIMATED RADIUS:
+          // - Before transition: radius = 200 (inscribed circle in 400x400 bubble)
+          // - After transition: radius = 800 (large enough to cover full 1280x720 frame corners)
+          // The diagonal of 1280x720 is ~1469, so radius needs to be >= 735 to cover corners
+          // We use 800 to have some margin
+          
+          // For geq filter, time variable is T (uppercase)
+          const pGeq = `max(0,min(1,(T-${t0})/${animDuration}))`;
+          const easeGeq = `((${pGeq})*(${pGeq})*(3-2*(${pGeq})))`;
+          
+          // Radius animates from 200 (small bubble) to 800 (covers full frame)
+          const startRadius = 200;  // half of 400x400 bubble
+          const endRadius = 800;    // large enough to cover 1280x720 diagonal
+          const animRadius = `(${startRadius}+(${endRadius}-${startRadius})*(${easeGeq}))`;
+          
+          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(${animRadius},2)),255,0)'`;
           
           filterComplex = [
-            // Scale with per-frame animated dimensions, then apply circle mask
+            // Scale with per-frame animated dimensions, then apply animated circle mask
             `[1:v]scale=w='${animW}':h='${animH}':eval=frame,format=rgba,${circleMask}[ov];`,
             // Overlay with per-frame animated position
             `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
           ].join('');
         } else {
-          // Square/rectangle - no circle mask
+          // Square/rectangle - no circle mask needed, just scale and position
           filterComplex = [
             `[1:v]scale=w='${animW}':h='${animH}':eval=frame[ov];`,
             `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
