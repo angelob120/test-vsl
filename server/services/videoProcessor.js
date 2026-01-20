@@ -209,84 +209,77 @@ export class VideoProcessor {
       let outputOptions;
       
       if (style === 'full_screen') {
-        // FULLSCREEN MODE WITH SMOOTH EXPANSION:
-        // Phase 1: Bubble in corner until transition time
-        // Phase 2: Quick zoom-out animation revealing fullscreen video (0.5s)
-        // Phase 3: Continue fullscreen
+        // FULLSCREEN MODE WITH SMOOTH BUBBLE EXPANSION:
+        // The bubble physically grows from 400x400 in corner to 1280x720 fullscreen
+        // Animation duration: 0.5 seconds starting at fullscreenTransitionTime
         
         const animDuration = 0.5;
-        const animFrames = Math.round(animDuration * FPS); // frames for animation
+        const t0 = fullscreenTransitionTime; // transition start time
         
-        // Bubble size and position
-        const bubbleSize = bigBubbleSize; // 400x400
+        // Bubble dimensions
+        const startW = bigBubbleSize.width;   // 400
+        const startH = bigBubbleSize.height;  // 400
+        const endW = VIEWPORT_WIDTH;          // 1280
+        const endH = VIEWPORT_HEIGHT;         // 720
         
-        let bubblePosX, bubblePosY;
+        // Starting position (corner)
+        let startX, startY;
         switch (position) {
           case 'bottom_right':
-            bubblePosX = VIEWPORT_WIDTH - bubbleSize.width - padding;
-            bubblePosY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+            startX = VIEWPORT_WIDTH - startW - padding;
+            startY = VIEWPORT_HEIGHT - startH - padding;
             break;
           case 'top_left':
-            bubblePosX = padding;
-            bubblePosY = padding;
+            startX = padding;
+            startY = padding;
             break;
           case 'top_right':
-            bubblePosX = VIEWPORT_WIDTH - bubbleSize.width - padding;
-            bubblePosY = padding;
+            startX = VIEWPORT_WIDTH - startW - padding;
+            startY = padding;
             break;
           default: // bottom_left
-            bubblePosX = padding;
-            bubblePosY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+            startX = padding;
+            startY = VIEWPORT_HEIGHT - startH - padding;
         }
         
-        // Bubble filter (circle or square)
-        const bubbleFilter = shape === 'circle'
-          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'`
-          : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
+        // Progress: 0 before t0, ramps 0->1 during animation, 1 after
+        // p = clamp((t - t0) / duration, 0, 1)
+        const p = `max(0,min(1,(t-${t0})/${animDuration}))`;
         
-        // Fullscreen scale
-        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT},setsar=1`;
+        // Smoothstep easing for natural motion: 3p² - 2p³
+        const ease = `((${p})*(${p})*(3-2*(${p})))`;
         
-        // Calculate zoom start based on bubble size ratio to fullscreen
-        // Start zoomed in (showing bubble-sized area) then zoom out to full
-        const zoomStart = VIEWPORT_WIDTH / bubbleSize.width; // ~3.2x zoom
-        const zoomEnd = 1;
+        // Animated width: 400 -> 1280
+        const animW = `${startW}+(${endW}-${startW})*(${ease})`;
         
-        // Calculate pan start position (where bubble was, in zoompan coordinates)
-        // zoompan x/y are the top-left corner of the zoom window
-        // We want to start centered on where the bubble was
-        const bubbleCenterX = bubblePosX + bubbleSize.width / 2;
-        const bubbleCenterY = bubblePosY + bubbleSize.height / 2;
+        // Animated height: 400 -> 720  
+        const animH = `${startH}+(${endH}-${startH})*(${ease})`;
         
-        // At zoom=zoomStart, visible area is VIEWPORT_WIDTH/zoomStart x VIEWPORT_HEIGHT/zoomStart
-        // We want to center this on the bubble position
-        const panStartX = bubbleCenterX - (VIEWPORT_WIDTH / zoomStart / 2);
-        const panStartY = bubbleCenterY - (VIEWPORT_HEIGHT / zoomStart / 2);
+        // Animated X position: startX -> 0
+        const animX = `${startX}*(1-(${ease}))`;
         
-        // Zoom expression: starts at zoomStart, eases to zoomEnd over animFrames
-        // Using smoothstep easing
-        const zoomExpr = `if(lt(on,${animFrames}),${zoomStart}-(${zoomStart}-${zoomEnd})*(on/${animFrames})*(on/${animFrames})*(3-2*on/${animFrames}),${zoomEnd})`;
+        // Animated Y position: startY -> 0
+        const animY = `${startY}*(1-(${ease}))`;
         
-        // Pan expressions: start at bubble position, ease to 0,0
-        const panXExpr = `if(lt(on,${animFrames}),${panStartX}-(${panStartX})*(on/${animFrames})*(on/${animFrames})*(3-2*on/${animFrames}),0)`;
-        const panYExpr = `if(lt(on,${animFrames}),${panStartY}-(${panStartY})*(on/${animFrames})*(on/${animFrames})*(3-2*on/${animFrames}),0)`;
-        
-        filterComplex = [
-          // Stream for bubble overlay (Phase 1)
-          `[1:v]${bubbleFilter}[bubble];`,
+        if (shape === 'circle') {
+          // Circle mask that works at any size (radius = half of smaller dimension)
+          // As bubble expands, circle expands with it
+          // When fully expanded, the circle will be large enough to mostly fill the frame
+          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2)),255,0)'`;
           
-          // Stream for fullscreen with zoom animation (Phase 2+)
-          `[1:v]${fullscreenFilter},zoompan=z='${zoomExpr}':x='${panXExpr}':y='${panYExpr}':d=1:s=${VIEWPORT_WIDTH}x${VIEWPORT_HEIGHT}:fps=${FPS}[fs_zoom];`,
-          
-          // Phase 1: background + bubble, trim to transition time
-          `[0:v][bubble]overlay=${bubblePosX}:${bubblePosY},trim=0:${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase1];`,
-          
-          // Phase 2: zooming fullscreen video, starting from transition time
-          `[fs_zoom]trim=${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase2];`,
-          
-          // Concatenate phases
-          `[phase1][phase2]concat=n=2:v=1:a=0[outv]`
-        ].join('');
+          filterComplex = [
+            // Scale with per-frame animated dimensions, then apply circle mask
+            `[1:v]scale=w='${animW}':h='${animH}':eval=frame,format=rgba,${circleMask}[ov];`,
+            // Overlay with per-frame animated position
+            `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
+          ].join('');
+        } else {
+          // Square/rectangle - no circle mask
+          filterComplex = [
+            `[1:v]scale=w='${animW}':h='${animH}':eval=frame[ov];`,
+            `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
+          ].join('');
+        }
         
         outputOptions = [
           '-map [outv]',
