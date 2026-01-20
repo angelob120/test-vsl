@@ -210,72 +210,74 @@ export class VideoProcessor {
       
       if (style === 'full_screen') {
         // FULLSCREEN MODE WITH SMOOTH EXPANSION:
-        // Phase 1 (from t=0 to fullscreenTransitionTime - animDuration): 
-        //   - Website scrolling as background
-        //   - Uploaded video as a BIG BUBBLE (400x400) in the corner
-        // Phase 2 (transition animation - 0.5s):
-        //   - Bubble smoothly expands to fill the entire screen
-        //   - Uses xfade with circleopen transition for natural expansion effect
-        // Phase 3 (after fullscreenTransitionTime):
-        //   - ONLY the uploaded video FULLSCREEN - website completely gone
+        // Phase 1: Bubble in corner (static size) until transition time
+        // Phase 2: Bubble expands smoothly to fullscreen over 0.5 seconds
+        // The expansion uses animated overlay position and scale
         
-        // Animation duration for bubble expansion (less than 1 second)
         const animDuration = 0.5;
+        const transitionStart = fullscreenTransitionTime;
+        const transitionEnd = fullscreenTransitionTime + animDuration;
         
-        // Use BIG bubble size for Phase 1
+        // Starting bubble size and position
         const bubbleSize = bigBubbleSize; // 400x400
+        const startW = bubbleSize.width;
+        const startH = bubbleSize.height;
+        const endW = VIEWPORT_WIDTH;
+        const endH = VIEWPORT_HEIGHT;
         
-        // Recalculate position for BIG bubble
-        let bubblePosX, bubblePosY;
+        // Calculate starting position for bubble in corner
+        let startX, startY;
         switch (position) {
           case 'bottom_right':
-            bubblePosX = VIEWPORT_WIDTH - bubbleSize.width - padding;
-            bubblePosY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+            startX = VIEWPORT_WIDTH - startW - padding;
+            startY = VIEWPORT_HEIGHT - startH - padding;
             break;
           case 'top_left':
-            bubblePosX = padding;
-            bubblePosY = padding;
+            startX = padding;
+            startY = padding;
             break;
           case 'top_right':
-            bubblePosX = VIEWPORT_WIDTH - bubbleSize.width - padding;
-            bubblePosY = padding;
+            startX = VIEWPORT_WIDTH - startW - padding;
+            startY = padding;
             break;
           default: // bottom_left
-            bubblePosX = padding;
-            bubblePosY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+            startX = padding;
+            startY = VIEWPORT_HEIGHT - startH - padding;
         }
         
-        // BIG bubble filter for uploaded video (Phase 1) - 400x400
-        const bigBubbleFilter = shape === 'circle'
-          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
-          : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
+        // Progress expression: 0 before transition, 0-1 during, 1 after
+        // t = current time
+        const progress = `min(1,max(0,(t-${transitionStart})/${animDuration}))`;
+        // Smooth easing (smoothstep)
+        const eased = `(${progress})*(${progress})*(3-2*(${progress}))`;
         
-        // Fullscreen filter - scale video to fill entire viewport
-        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT},setsar=1`;
+        // Animated dimensions
+        const w = `${startW}+${endW - startW}*(${eased})`;
+        const h = `${startH}+${endH - startH}*(${eased})`;
         
-        // Calculate xfade offset (when transition starts)
-        const xfadeOffset = Math.max(0, fullscreenTransitionTime - animDuration);
+        // Animated position (from corner to 0,0)
+        const x = `${startX}-${startX}*(${eased})`;
+        const y = `${startY}-${startY}*(${eased})`;
         
-        filterComplex = [
-          // Split the uploaded video into two streams
-          `[1:v]split=2[ov_bubble_src][ov_fullscreen_src];`,
-          
-          // Create BIG bubble version (Phase 1)
-          `[ov_bubble_src]${bigBubbleFilter}[video_bubble];`,
-          
-          // Create fullscreen version (Phase 2)
-          `[ov_fullscreen_src]${fullscreenFilter}[video_fullscreen];`,
-          
-          // Phase 1: Website + bubble, trim to transition time
-          `[0:v][video_bubble]overlay=${bubblePosX}:${bubblePosY},trim=0:${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase1];`,
-          
-          // Phase 2: Fullscreen video only, start slightly before transition for smooth xfade
-          `[video_fullscreen]trim=${xfadeOffset},setpts=PTS-STARTPTS[phase2];`,
-          
-          // Smooth expansion transition: circleopen creates a circle that expands outward
-          // This gives the effect of the bubble expanding to fill the screen
-          `[phase1][phase2]xfade=transition=circleopen:duration=${animDuration}:offset=${xfadeOffset}[outv]`
-        ].join('');
+        // Circle mask: starts as circle, expands to cover full frame
+        // The radius expands proportionally with the scale
+        const circleRadius = `(W/2)`;
+        const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(${circleRadius},2)),255,0)'`;
+        
+        if (shape === 'circle') {
+          filterComplex = [
+            // Scale overlay with animated size, then apply circle mask
+            `[1:v]scale=w='${w}':h='${h}':eval=frame,format=rgba,${circleMask}[ov];`,
+            // Overlay with animated position
+            `[0:v][ov]overlay=x='${x}':y='${y}':eval=frame[outv]`
+          ].join('');
+        } else {
+          // Square/rectangle - no circle mask needed
+          filterComplex = [
+            `[1:v]scale=w='${w}':h='${h}':eval=frame[ov];`,
+            `[0:v][ov]overlay=x='${x}':y='${y}':eval=frame[outv]`
+          ].join('');
+        }
         
         outputOptions = [
           '-map [outv]',
