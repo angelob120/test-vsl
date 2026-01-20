@@ -334,12 +334,60 @@ router.put('/:id', upload.fields([
   }
 });
 
-// Delete campaign
+// Delete campaign and all associated files
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Get campaign to find intro/secondary video paths
+    const campaignResult = await pool.query(
+      'SELECT intro_video_path, secondary_video_path FROM campaigns WHERE id = $1',
+      [id]
+    );
+    
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Campaign not found' });
+    }
+    
+    const campaign = campaignResult.rows[0];
+    
+    // Get all generated videos for this campaign to delete their files
+    const videosResult = await pool.query(
+      'SELECT video_path, preview_path, thumbnail_path, background_path FROM generated_videos WHERE campaign_id = $1',
+      [id]
+    );
+    
+    // Delete all generated video files
+    let deletedFiles = [];
+    for (const video of videosResult.rows) {
+      if (video.video_path) {
+        try { await fs.unlink(video.video_path); deletedFiles.push('video'); } catch {}
+      }
+      if (video.preview_path) {
+        try { await fs.unlink(video.preview_path); deletedFiles.push('preview'); } catch {}
+      }
+      if (video.thumbnail_path) {
+        try { await fs.unlink(video.thumbnail_path); deletedFiles.push('thumbnail'); } catch {}
+      }
+      if (video.background_path) {
+        try { await fs.unlink(video.background_path); deletedFiles.push('background'); } catch {}
+      }
+    }
+    
+    // Delete campaign's uploaded intro/secondary videos
+    if (campaign.intro_video_path) {
+      try { await fs.unlink(campaign.intro_video_path); deletedFiles.push('intro'); } catch {}
+    }
+    if (campaign.secondary_video_path) {
+      try { await fs.unlink(campaign.secondary_video_path); deletedFiles.push('secondary'); } catch {}
+    }
+    
+    // Delete from database (cascades to leads and generated_videos)
     await pool.query('DELETE FROM campaigns WHERE id = $1', [id]);
-    res.json({ success: true });
+    
+    console.log(`🗑️ Deleted campaign ${id} and ${deletedFiles.length} files`);
+    
+    res.json({ success: true, deletedFiles: deletedFiles.length });
   } catch (error) {
     console.error('Delete campaign error:', error);
     res.status(500).json({ success: false, error: error.message });
