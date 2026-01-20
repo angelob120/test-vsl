@@ -227,7 +227,6 @@ export default function Generator() {
     video_style: 'small_bubble',
     video_position: 'bottom_left',
     video_shape: 'circle',
-    video_title: 'A video for you 👋',
     video_description: 'Intro',
     calendar_url: '',
     button_text: 'Book a Call',
@@ -237,9 +236,7 @@ export default function Generator() {
     text_hover_color: '#ffffff',
     bg_hover_color: '#4f46e5',
     dark_mode: false,
-    display_delay: 10,
     fullscreen_transition_time: 20,
-    scroll_duration: 15,
     scroll_behavior: 'stay_down',
     mouse_display: 'moving',
     display_tab: true
@@ -357,7 +354,6 @@ export default function Generator() {
       video_style: 'small_bubble',
       video_position: 'bottom_left',
       video_shape: 'circle',
-      video_title: 'A video for you 👋',
       video_description: 'Intro',
       calendar_url: '',
       button_text: 'Book a Call',
@@ -367,7 +363,7 @@ export default function Generator() {
       text_hover_color: '#ffffff',
       bg_hover_color: '#4f46e5',
       dark_mode: false,
-      display_delay: 10,
+      fullscreen_transition_time: 20,
       scroll_behavior: 'stay_down',
       mouse_display: 'moving',
       display_tab: true
@@ -1115,32 +1111,6 @@ export default function Generator() {
                       </div>
                     </div>
 
-                    {/* Title & Display Delay - Only for full_screen style */}
-                    {settings.video_style === 'full_screen' && (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Video Title</label>
-                          <input
-                            type="text"
-                            value={settings.video_title}
-                            onChange={(e) => setSettings({ ...settings, video_title: e.target.value })}
-                            className="input-field"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-2">Display Delay (seconds)</label>
-                          <input
-                            type="number"
-                            value={settings.display_delay}
-                            onChange={(e) => setSettings({ ...settings, display_delay: parseInt(e.target.value) || 0 })}
-                            className="input-field"
-                            min="0"
-                            max="60"
-                          />
-                        </div>
-                      </div>
-                    )}
-
                     {/* Fullscreen Transition Time - Only for full_screen style */}
                     {settings.video_style === 'full_screen' && (
                       <div>
@@ -1161,25 +1131,6 @@ export default function Generator() {
                         </p>
                       </div>
                     )}
-
-                    {/* Scroll Duration */}
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Background Scroll Duration (seconds)
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.scroll_duration}
-                        onChange={(e) => setSettings({ ...settings, scroll_duration: parseInt(e.target.value) || 15 })}
-                        className="input-field"
-                        min="5"
-                        max="60"
-                        placeholder="15"
-                      />
-                      <p className="text-xs text-gray-400 mt-1">
-                        How long the website takes to scroll from top to bottom
-                      </p>
-                    </div>
 
                     {/* CTA Button */}
                     <div className="grid grid-cols-2 gap-4">

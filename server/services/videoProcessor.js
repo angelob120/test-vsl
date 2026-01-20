@@ -10,8 +10,12 @@ const __dirname = path.dirname(__filename);
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 720;
-const SCROLL_DURATION = 15; // seconds for background scroll (default)
 const FPS = 30;
+
+// Loom-style scroll settings
+const SCROLL_STEP_DURATION = 2.5;  // Total duration of each step (scroll + pause)
+const SCROLL_PHASE_DURATION = 1.8; // How long the scroll part takes within each step
+const PAUSE_PHASE_DURATION = 0.7;  // How long the pause takes (SCROLL_STEP_DURATION - SCROLL_PHASE_DURATION)
 
 export class VideoProcessor {
   constructor(outputDir) {
@@ -91,16 +95,45 @@ export class VideoProcessor {
     }
   }
 
-  // Create scrolling background video from screenshot
-  // scrollDuration = how long to scroll
-  // totalDuration = total video length (if longer than scrollDuration, freeze on last frame)
-  async createScrollingBackground(screenshotPath, outputPath, scrollDuration = SCROLL_DURATION, totalDuration = null) {
+  // Create Loom-style scrolling background video from screenshot
+  // Scrolls in steps: scroll a bit -> pause -> scroll a bit -> pause
+  // totalDuration = total video length
+  // scrollDuration = how long the scrolling should take (before freezing at bottom)
+  async createScrollingBackground(screenshotPath, outputPath, scrollDuration, totalDuration) {
     const effectiveTotalDuration = totalDuration || scrollDuration;
     
     return new Promise((resolve, reject) => {
-      // Use FFmpeg to create a smooth scrolling effect with easing
-      // Scroll happens during scrollDuration, then freezes at bottom for remaining time
-      const easingFormula = `(min(t,${scrollDuration})/${scrollDuration})*(min(t,${scrollDuration})/${scrollDuration})*(3-2*(min(t,${scrollDuration})/${scrollDuration}))`;
+      // Loom-style step scrolling formula
+      // Creates a staircase effect: scroll smoothly for a bit, then pause, then scroll, then pause
+      
+      // Calculate number of steps based on scroll duration
+      const numSteps = Math.max(3, Math.ceil(scrollDuration / SCROLL_STEP_DURATION));
+      const stepDuration = scrollDuration / numSteps;
+      const scrollPhase = stepDuration * 0.7; // 70% of each step is scrolling
+      
+      // FFmpeg expression for Loom-style step scrolling:
+      // - floor(t/stepDuration) gives current step number
+      // - mod(t, stepDuration) gives time within current step
+      // - During scroll phase: smoothly interpolate within the step
+      // - During pause phase: hold at step end position
+      // - After scrollDuration: freeze at bottom
+      
+      // The formula creates smooth scrolling within each step, then a pause
+      // progress = (step_num + smooth_progress_within_step) / num_steps
+      // where smooth_progress_within_step uses easing for natural movement
+      
+      const scrollFormula = `
+        if(lt(t,${scrollDuration}),
+          (
+            floor(t/${stepDuration}) + 
+            if(lt(mod(t,${stepDuration}),${scrollPhase}),
+              (mod(t,${stepDuration})/${scrollPhase})*(mod(t,${stepDuration})/${scrollPhase})*(3-2*(mod(t,${stepDuration})/${scrollPhase})),
+              1
+            )
+          )/${numSteps},
+          1
+        )
+      `.replace(/\s+/g, '');
       
       ffmpeg(screenshotPath)
         .inputOptions([
@@ -108,7 +141,7 @@ export class VideoProcessor {
         ])
         .outputOptions([
           `-t ${effectiveTotalDuration}`,
-          `-vf scale=${VIEWPORT_WIDTH}:-1,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:0:'min(ih-${VIEWPORT_HEIGHT},${easingFormula}*(ih-${VIEWPORT_HEIGHT}))'`,
+          `-vf scale=${VIEWPORT_WIDTH}:-1,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:0:'min(ih-${VIEWPORT_HEIGHT},(${scrollFormula})*(ih-${VIEWPORT_HEIGHT}))'`,
           '-c:v libx264',
           '-pix_fmt yuv420p',
           `-r ${FPS}`
@@ -130,8 +163,7 @@ export class VideoProcessor {
       position = 'bottom_left',
       shape = 'circle',
       style = 'small_bubble',
-      displayDelay = 2,
-      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to rectangle/fullscreen (ONLY for full_screen style)
+      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to fullscreen (ONLY for full_screen style)
     } = config;
 
     // Calculate overlay dimensions based on style
@@ -180,7 +212,7 @@ export class VideoProcessor {
         // FULLSCREEN MODE:
         // Phase 1 (from t=0 to fullscreenTransitionTime): 
         //   - Website scrolling as background
-        //   - Uploaded video as a bubble in the corner FROM THE START
+        //   - Uploaded video as a bubble in the corner FROM THE START (no delay)
         // Phase 2 (after fullscreenTransitionTime):
         //   - Uploaded video goes COMPLETELY FULLSCREEN
         //   - Website is NO LONGER VISIBLE AT ALL
@@ -207,11 +239,9 @@ export class VideoProcessor {
           `[0:v][video_bubble]overlay=${posX}:${posY}:enable='lt(t,${fullscreenTransitionTime})'[phase1];`,
           
           // Phase 2: Uploaded video fullscreen completely replaces background (after fullscreenTransitionTime)
-          // The fullscreen video covers the entire frame, making the background invisible
           `[phase1][video_fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
         
-        // For fullscreen mode, use -shortest to end when overlay video ends
         outputOptions = [
           '-map [outv]',
           '-map 1:a?',
@@ -242,14 +272,12 @@ export class VideoProcessor {
           ].join('');
         }
         
-        // For bubble modes, use the overlay video duration (no -shortest)
-        // The background has already been extended to match overlay duration
         outputOptions = [
           '-map [outv]',
           '-map 1:a?',
           '-c:v libx264',
           '-c:a aac',
-          '-shortest', // This will now work correctly since background is extended
+          '-shortest',
           '-pix_fmt yuv420p'
         ];
       }
@@ -259,7 +287,6 @@ export class VideoProcessor {
         .input(overlayVideoPath);
 
       if (secondaryVideoPath) {
-        // Add secondary video after intro
         command.input(secondaryVideoPath);
       }
 
@@ -335,27 +362,21 @@ export class VideoProcessor {
         throw new Error(`Failed to capture website: ${captureResult.error}`);
       }
 
-      // Step 3: Create scrolling background video
-      console.log(`🎬 Creating scrolling background...`);
+      // Step 3: Create scrolling background video with Loom-style scroll
+      console.log(`🎬 Creating Loom-style scrolling background...`);
       const backgroundVideoPath = path.join(tempDir, 'background.mp4');
-      const scrollDuration = settings.scroll_duration || 15;
       const videoStyle = settings.video_style || 'small_bubble';
       
-      // For bubble styles (small_bubble, big_bubble):
-      // - Extend background to match intro video duration
-      // - Website scrolls for scrollDuration, then freezes on last frame
-      // For full_screen style:
-      // - Just use scroll duration (video will transition to fullscreen anyway)
-      let totalBackgroundDuration;
-      if (videoStyle === 'small_bubble' || videoStyle === 'big_bubble') {
-        // Background needs to be at least as long as the intro video
-        // Add a small buffer to ensure smooth ending
-        totalBackgroundDuration = Math.max(scrollDuration, introVideoDuration + 1);
-        console.log(`   Bubble mode: extending background to ${totalBackgroundDuration.toFixed(2)}s (scroll: ${scrollDuration}s, then freeze)`);
-      } else {
-        // Full screen mode - just use scroll duration
-        totalBackgroundDuration = scrollDuration;
-      }
+      // Scroll duration is based on video length
+      // Use 70% of video duration for scrolling, leaving 30% frozen at bottom
+      // But cap scrolling at reasonable limits
+      const scrollDuration = Math.min(Math.max(introVideoDuration * 0.7, 8), 45);
+      
+      // Total background duration needs to match the intro video
+      const totalBackgroundDuration = introVideoDuration + 1; // Add 1s buffer
+      
+      console.log(`   Scroll duration: ${scrollDuration.toFixed(2)}s (Loom-style step scrolling)`);
+      console.log(`   Total background: ${totalBackgroundDuration.toFixed(2)}s`);
       
       await this.createScrollingBackground(screenshotPath, backgroundVideoPath, scrollDuration, totalBackgroundDuration);
 
@@ -370,7 +391,6 @@ export class VideoProcessor {
         position: settings.video_position,
         shape: settings.video_shape,
         style: videoStyle,
-        displayDelay: settings.display_delay || 2,
         fullscreenTransitionTime: settings.fullscreen_transition_time || 20
       });
 
