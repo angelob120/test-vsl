@@ -1610,7 +1610,7 @@ export default function Generator() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Preview Video"
+                              title="Preview GIF (website scroll)"
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </a>

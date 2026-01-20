@@ -93,10 +93,10 @@ export function getVideoPath(leadId) {
 }
 
 /**
- * Get the preview path for a lead
+ * Get the preview path for a lead (GIF format for text message sharing)
  */
 export function getPreviewPath(leadId) {
-  return path.join(STORAGE_PATHS.previews, `${leadId}_preview.mp4`);
+  return path.join(STORAGE_PATHS.previews, `${leadId}_preview.gif`);
 }
 
 /**

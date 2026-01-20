@@ -369,6 +369,58 @@ export class VideoProcessor {
     });
   }
 
+  // Create a scrolling GIF preview of just the website (no overlay)
+  // This is optimized for sharing via text messages
+  async createScrollingGif(screenshotPath, outputPath, duration = 6) {
+    return new Promise((resolve, reject) => {
+      // Loom-style step scrolling for the GIF
+      const numSteps = Math.max(3, Math.ceil(duration / SCROLL_STEP_DURATION));
+      const stepDuration = duration / numSteps;
+      const scrollPhase = stepDuration * 0.805;
+      
+      const scrollFormula = `
+        if(lt(t,${duration}),
+          (
+            floor(t/${stepDuration}) + 
+            if(lt(mod(t,${stepDuration}),${scrollPhase}),
+              (mod(t,${stepDuration})/${scrollPhase})*(mod(t,${stepDuration})/${scrollPhase})*(3-2*(mod(t,${stepDuration})/${scrollPhase})),
+              1
+            )
+          )/${numSteps},
+          1
+        )
+      `.replace(/\s+/g, '');
+
+      // GIF settings optimized for text message sharing
+      // - Smaller dimensions (640x360) for smaller file size
+      // - 12 FPS for smooth but compact animation
+      // - Optimized palette for better colors
+      const gifWidth = 640;
+      const gifHeight = 360;
+      const gifFps = 12;
+
+      // Build the complex filter for GIF with palette optimization
+      const filterComplex = [
+        `[0:v]scale=${gifWidth}:-1,crop=${gifWidth}:${gifHeight}:0:'min(ih-${gifHeight},(${scrollFormula})*(ih-${gifHeight}))',fps=${gifFps},split[s0][s1]`,
+        `[s0]palettegen=max_colors=128:stats_mode=diff[p]`,
+        `[s1][p]paletteuse=dither=bayer:bayer_scale=3[out]`
+      ].join(';');
+
+      ffmpeg(screenshotPath)
+        .inputOptions(['-loop 1'])
+        .complexFilter(filterComplex)
+        .outputOptions([
+          `-t ${duration}`,
+          '-map [out]',
+          '-loop 0'
+        ])
+        .output(outputPath)
+        .on('end', () => resolve({ success: true }))
+        .on('error', (err) => reject(err))
+        .run();
+    });
+  }
+
   // Create thumbnail from video
   async createThumbnail(inputPath, outputPath, timeOffset = 3) {
     return new Promise((resolve, reject) => {
@@ -446,11 +498,11 @@ export class VideoProcessor {
         fullscreenTransitionTime: settings.fullscreen_transition_time || 20
       });
 
-      // Step 5: Create preview
-      console.log(`📹 Creating preview...`);
-      const previewPath = path.join(STORAGE_PATHS.previews, `${leadId}_preview.mp4`);
+      // Step 5: Create GIF preview (scrolling website only, no overlay)
+      console.log(`📹 Creating GIF preview (website scroll only)...`);
+      const previewPath = path.join(STORAGE_PATHS.previews, `${leadId}_preview.gif`);
       await fs.mkdir(path.dirname(previewPath), { recursive: true });
-      await this.createPreview(finalVideoPath, previewPath, 8);
+      await this.createScrollingGif(screenshotPath, previewPath, 6);
 
       // Step 6: Create thumbnail
       console.log(`🖼️ Creating thumbnail...`);

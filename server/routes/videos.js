@@ -368,7 +368,7 @@ router.get('/file/:slug', async (req, res) => {
   }
 });
 
-// Serve preview file
+// Serve preview GIF file (scrolling website only, no overlay - for text message sharing)
 router.get('/preview/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
@@ -382,6 +382,10 @@ router.get('/preview/:slug', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Preview not found' });
     }
 
+    // Set proper headers for GIF
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    
     res.sendFile(result.rows[0].preview_path);
   } catch (error) {
     console.error('Serve preview error:', error);
