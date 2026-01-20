@@ -85,7 +85,7 @@ export class VideoProcessor {
 
       return { 
         success: true, 
-        fullHeight: Math.min(fullHeight, 5000) // Cap at 5000px
+        fullHeight: Math.min(fullHeight, 15000) // Cap at 5000px
       };
     } catch (error) {
       console.error(`Failed to capture ${url}:`, error.message);
