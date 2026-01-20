@@ -209,13 +209,18 @@ export class VideoProcessor {
       let outputOptions;
       
       if (style === 'full_screen') {
-        // FULLSCREEN MODE:
-        // Phase 1 (from t=0 to fullscreenTransitionTime): 
+        // FULLSCREEN MODE WITH SMOOTH EXPANSION:
+        // Phase 1 (from t=0 to fullscreenTransitionTime - animDuration): 
         //   - Website scrolling as background
         //   - Uploaded video as a BIG BUBBLE (400x400) in the corner
-        // Phase 2 (after fullscreenTransitionTime):
+        // Phase 2 (transition animation - 0.5s):
+        //   - Bubble smoothly expands to fill the entire screen
+        //   - Uses xfade with circleopen transition for natural expansion effect
+        // Phase 3 (after fullscreenTransitionTime):
         //   - ONLY the uploaded video FULLSCREEN - website completely gone
-        //   - Uses concat to hard cut between phases
+        
+        // Animation duration for bubble expansion (less than 1 second)
+        const animDuration = 0.5;
         
         // Use BIG bubble size for Phase 1
         const bubbleSize = bigBubbleSize; // 400x400
@@ -248,6 +253,9 @@ export class VideoProcessor {
         // Fullscreen filter - scale video to fill entire viewport
         const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT},setsar=1`;
         
+        // Calculate xfade offset (when transition starts)
+        const xfadeOffset = Math.max(0, fullscreenTransitionTime - animDuration);
+        
         filterComplex = [
           // Split the uploaded video into two streams
           `[1:v]split=2[ov_bubble_src][ov_fullscreen_src];`,
@@ -261,11 +269,12 @@ export class VideoProcessor {
           // Phase 1: Website + bubble, trim to transition time
           `[0:v][video_bubble]overlay=${bubblePosX}:${bubblePosY},trim=0:${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase1];`,
           
-          // Phase 2: Fullscreen video only (NO website), start from transition time
-          `[video_fullscreen]trim=${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase2];`,
+          // Phase 2: Fullscreen video only, start slightly before transition for smooth xfade
+          `[video_fullscreen]trim=${xfadeOffset},setpts=PTS-STARTPTS[phase2];`,
           
-          // Concatenate: Phase 1 then Phase 2
-          `[phase1][phase2]concat=n=2:v=1:a=0[outv]`
+          // Smooth expansion transition: circleopen creates a circle that expands outward
+          // This gives the effect of the bubble expanding to fill the screen
+          `[phase1][phase2]xfade=transition=circleopen:duration=${animDuration}:offset=${xfadeOffset}[outv]`
         ].join('');
         
         outputOptions = [
