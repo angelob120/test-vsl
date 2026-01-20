@@ -10,9 +10,10 @@ import {
   getExpirationDate, 
   deleteVideoFiles,
   getStorageStats,
-  RETENTION_DAYS 
+  RETENTION_DAYS,
+  MAX_STORAGE_MB 
 } from '../services/storage.js';
-import { getCleanupStats, cleanupExpiredVideos } from '../services/cleanup.js';
+import { getCleanupStats, cleanupExpiredVideos, cleanupStorageLimit } from '../services/cleanup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -497,7 +498,8 @@ router.get('/landing/:slug', async (req, res) => {
         c.text_hover_color,
         c.bg_hover_color,
         c.dark_mode,
-        c.display_tab
+        c.display_tab,
+        c.show_cta_button
       FROM generated_videos gv
       JOIN leads l ON gv.lead_id = l.id
       JOIN campaigns c ON gv.campaign_id = c.id
@@ -533,6 +535,11 @@ router.get('/storage/stats', async (req, res) => {
     const storageStats = await getStorageStats();
     const cleanupStats = await getCleanupStats();
     
+    // Calculate total usage
+    const totalUsageMB = (storageStats.videos?.totalSizeMB || 0) + 
+                         (storageStats.previews?.totalSizeMB || 0) + 
+                         (storageStats.thumbnails?.totalSizeMB || 0);
+    
     res.json({
       success: true,
       storage: storageStats,
@@ -540,6 +547,12 @@ router.get('/storage/stats', async (req, res) => {
       retention: {
         days: RETENTION_DAYS,
         description: `Videos auto-delete after ${RETENTION_DAYS} days`
+      },
+      limits: {
+        maxStorageMB: MAX_STORAGE_MB,
+        currentUsageMB: Math.round(totalUsageMB * 100) / 100,
+        usagePercent: Math.round((totalUsageMB / MAX_STORAGE_MB) * 100),
+        description: `Storage limit: ${MAX_STORAGE_MB}MB. Oldest videos auto-deleted when exceeded.`
       }
     });
   } catch (error) {
@@ -552,8 +565,13 @@ router.get('/storage/stats', async (req, res) => {
 router.post('/storage/cleanup', async (req, res) => {
   try {
     console.log('🧹 Manual cleanup triggered');
-    const result = await cleanupExpiredVideos();
-    res.json({ success: true, ...result });
+    const expiredResult = await cleanupExpiredVideos();
+    const storageResult = await cleanupStorageLimit();
+    res.json({ 
+      success: true, 
+      expired: expiredResult,
+      storage: storageResult
+    });
   } catch (error) {
     console.error('Manual cleanup error:', error);
     res.status(500).json({ success: false, error: error.message });

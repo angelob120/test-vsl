@@ -45,6 +45,7 @@ export async function initDatabase() {
         scroll_behavior VARCHAR(50) DEFAULT 'stay_down',
         mouse_display VARCHAR(50) DEFAULT 'moving',
         display_tab BOOLEAN DEFAULT true,
+        show_cta_button BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -77,7 +78,7 @@ export async function initDatabase() {
         views INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '60 days'),
+        expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days'),
         CONSTRAINT unique_lead_video UNIQUE (lead_id)
       );
       
@@ -88,9 +89,20 @@ export async function initDatabase() {
           SELECT 1 FROM information_schema.columns 
           WHERE table_name = 'generated_videos' AND column_name = 'expires_at'
         ) THEN
-          ALTER TABLE generated_videos ADD COLUMN expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '60 days');
+          ALTER TABLE generated_videos ADD COLUMN expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days');
           -- Set expiration for existing videos
-          UPDATE generated_videos SET expires_at = created_at + INTERVAL '60 days' WHERE expires_at IS NULL;
+          UPDATE generated_videos SET expires_at = created_at + INTERVAL '30 days' WHERE expires_at IS NULL;
+        END IF;
+      END $$;
+      
+      -- Add show_cta_button column if it doesn't exist (migration)
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'campaigns' AND column_name = 'show_cta_button'
+        ) THEN
+          ALTER TABLE campaigns ADD COLUMN show_cta_button BOOLEAN DEFAULT false;
         END IF;
       END $$;
 

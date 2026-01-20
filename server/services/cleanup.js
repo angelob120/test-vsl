@@ -1,10 +1,11 @@
 import pool from '../db.js';
-import { deleteVideoFiles, RETENTION_DAYS } from './storage.js';
+import { deleteVideoFiles, RETENTION_DAYS, MAX_STORAGE_MB, getStorageStats } from './storage.js';
 
 /**
  * Cleanup service for auto-deleting expired videos
  * 
- * Videos are automatically deleted after RETENTION_DAYS (default: 60 days)
+ * Videos are automatically deleted after RETENTION_DAYS (default: 30 days)
+ * Also deletes oldest videos when storage limit is exceeded
  * Runs every hour to check for and delete expired content
  */
 
@@ -15,6 +16,7 @@ let cleanupTimer = null;
 
 /**
  * Delete expired videos from database and filesystem
+ * Also deletes associated leads
  */
 export async function cleanupExpiredVideos() {
   console.log('🧹 Running cleanup for expired videos...');
@@ -44,11 +46,17 @@ export async function cleanupExpiredVideos() {
         // Delete files from filesystem
         const deletedFiles = await deleteVideoFiles(video);
         
-        // Delete from database
+        // Delete from database (this will cascade delete the video due to foreign key)
+        // First delete the video, then the lead
         await pool.query('DELETE FROM generated_videos WHERE id = $1', [video.id]);
         
+        // Also delete the associated lead
+        if (video.lead_id) {
+          await pool.query('DELETE FROM leads WHERE id = $1', [video.lead_id]);
+        }
+        
         deletedCount++;
-        console.log(`   ✓ Deleted video ${video.unique_slug} (files: ${deletedFiles.join(', ') || 'none'})`);
+        console.log(`   ✓ Deleted video ${video.unique_slug} and lead (files: ${deletedFiles.join(', ') || 'none'})`);
       } catch (error) {
         errorCount++;
         console.error(`   ❌ Failed to delete video ${video.id}:`, error.message);
@@ -67,6 +75,7 @@ export async function cleanupExpiredVideos() {
 /**
  * Clean up old videos that don't have expires_at set
  * (Migration for videos created before the expires_at column was added)
+ * Also deletes associated leads
  */
 export async function cleanupLegacyVideos() {
   console.log('🧹 Checking for legacy videos without expiration date...');
@@ -95,6 +104,12 @@ export async function cleanupLegacyVideos() {
       try {
         await deleteVideoFiles(video);
         await pool.query('DELETE FROM generated_videos WHERE id = $1', [video.id]);
+        
+        // Also delete the associated lead
+        if (video.lead_id) {
+          await pool.query('DELETE FROM leads WHERE id = $1', [video.lead_id]);
+        }
+        
         deletedCount++;
       } catch (error) {
         console.error(`   ❌ Failed to delete legacy video ${video.id}:`, error.message);
@@ -105,6 +120,81 @@ export async function cleanupLegacyVideos() {
   } catch (error) {
     console.error('🧹 Legacy cleanup error:', error.message);
     return { deleted: 0, message: error.message };
+  }
+}
+
+/**
+ * Clean up oldest videos when storage limit is exceeded
+ * Deletes oldest videos and their associated leads until storage is under limit
+ */
+export async function cleanupStorageLimit() {
+  console.log(`🧹 Checking storage limit (max: ${MAX_STORAGE_MB}MB)...`);
+  
+  try {
+    // Get current storage usage
+    const stats = await getStorageStats();
+    const totalStorageMB = (stats.videos?.totalSizeMB || 0) + 
+                           (stats.previews?.totalSizeMB || 0) + 
+                           (stats.thumbnails?.totalSizeMB || 0);
+    
+    console.log(`   Current storage: ${totalStorageMB.toFixed(2)}MB / ${MAX_STORAGE_MB}MB`);
+    
+    if (totalStorageMB <= MAX_STORAGE_MB) {
+      console.log('   ✓ Storage is within limit');
+      return { deleted: 0, freedMB: 0 };
+    }
+    
+    // Need to free up space - delete oldest videos first
+    const excessMB = totalStorageMB - MAX_STORAGE_MB;
+    console.log(`   ⚠️ Storage exceeded by ${excessMB.toFixed(2)}MB - cleaning up oldest videos...`);
+    
+    // Get oldest videos ordered by creation date
+    const oldestVideos = await pool.query(`
+      SELECT id, lead_id, video_path, preview_path, thumbnail_path, background_path, unique_slug, created_at
+      FROM generated_videos
+      WHERE status = 'completed'
+      ORDER BY created_at ASC
+      LIMIT 50
+    `);
+    
+    let deletedCount = 0;
+    let freedBytes = 0;
+    const targetFreeBytes = excessMB * 1024 * 1024 * 1.2; // Free 20% more than needed
+    
+    for (const video of oldestVideos.rows) {
+      if (freedBytes >= targetFreeBytes) {
+        break;
+      }
+      
+      try {
+        // Estimate size of this video's files
+        const deletedFiles = await deleteVideoFiles(video);
+        
+        // Assume average of ~5MB per video set (conservative estimate)
+        freedBytes += 5 * 1024 * 1024;
+        
+        // Delete from database
+        await pool.query('DELETE FROM generated_videos WHERE id = $1', [video.id]);
+        
+        // Also delete the associated lead
+        if (video.lead_id) {
+          await pool.query('DELETE FROM leads WHERE id = $1', [video.lead_id]);
+        }
+        
+        deletedCount++;
+        console.log(`   ✓ Deleted oldest video ${video.unique_slug} and lead`);
+      } catch (error) {
+        console.error(`   ❌ Failed to delete video ${video.id}:`, error.message);
+      }
+    }
+    
+    const freedMB = freedBytes / 1024 / 1024;
+    console.log(`🧹 Storage cleanup complete: ${deletedCount} videos deleted, ~${freedMB.toFixed(2)}MB freed`);
+    
+    return { deleted: deletedCount, freedMB };
+  } catch (error) {
+    console.error('🧹 Storage limit cleanup error:', error.message);
+    return { deleted: 0, freedMB: 0, message: error.message };
   }
 }
 
@@ -140,17 +230,20 @@ export async function setMissingExpirations() {
 export function startCleanupScheduler() {
   console.log(`📅 Starting cleanup scheduler (every ${CLEANUP_INTERVAL / 1000 / 60} minutes)`);
   console.log(`   Video retention: ${RETENTION_DAYS} days`);
+  console.log(`   Max storage: ${MAX_STORAGE_MB}MB`);
   
   // Run immediately on startup
   setTimeout(async () => {
     await setMissingExpirations();
     await cleanupExpiredVideos();
     await cleanupLegacyVideos();
+    await cleanupStorageLimit();
   }, 5000); // Wait 5 seconds after startup
   
   // Then run periodically
   cleanupTimer = setInterval(async () => {
     await cleanupExpiredVideos();
+    await cleanupStorageLimit();
   }, CLEANUP_INTERVAL);
   
   return cleanupTimer;
@@ -191,6 +284,7 @@ export async function getCleanupStats() {
 export default {
   cleanupExpiredVideos,
   cleanupLegacyVideos,
+  cleanupStorageLimit,
   setMissingExpirations,
   startCleanupScheduler,
   stopCleanupScheduler,

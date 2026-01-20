@@ -31,8 +31,11 @@ export const STORAGE_PATHS = {
   temp: path.join(BASE_PATH, 'temp'),            // Temporary processing files
 };
 
-// Retention period in days
-export const RETENTION_DAYS = parseInt(process.env.VIDEO_RETENTION_DAYS) || 60;
+// Retention period in days (default: 30 days)
+export const RETENTION_DAYS = parseInt(process.env.VIDEO_RETENTION_DAYS) || 30;
+
+// Maximum storage limit in MB (default: 5GB = 5120MB to match Railway volume)
+export const MAX_STORAGE_MB = parseInt(process.env.MAX_STORAGE_MB) || 5120;
 
 /**
  * Initialize all storage directories
@@ -193,6 +196,7 @@ export async function getStorageStats() {
 export default {
   STORAGE_PATHS,
   RETENTION_DAYS,
+  MAX_STORAGE_MB,
   initStorage,
   getUploadPath,
   getVideoPath,

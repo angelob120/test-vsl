@@ -186,7 +186,8 @@ router.post('/', handleUpload, async (req, res) => {
       display_delay,
       scroll_behavior,
       mouse_display,
-      display_tab
+      display_tab,
+      show_cta_button
     } = req.body;
 
     const introVideoPath = req.files?.introVideo?.[0]?.path || null;
@@ -206,8 +207,9 @@ router.post('/', handleUpload, async (req, res) => {
         video_title, video_description, calendar_url,
         button_text, button_link, text_color, bg_color,
         text_hover_color, bg_hover_color, dark_mode,
-        display_delay, scroll_behavior, mouse_display, display_tab
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        display_delay, scroll_behavior, mouse_display, display_tab,
+        show_cta_button
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING *
     `, [
       name || 'Untitled Campaign',
@@ -229,7 +231,8 @@ router.post('/', handleUpload, async (req, res) => {
       parseInt(display_delay) || 10,
       scroll_behavior || 'stay_down',
       mouse_display || 'moving',
-      display_tab === 'true' || display_tab === true
+      display_tab === 'true' || display_tab === true,
+      show_cta_button === 'true' || show_cta_button === true
     ]);
 
     console.log('✅ Campaign created:', result.rows[0].id);

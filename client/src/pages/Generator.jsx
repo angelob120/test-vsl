@@ -239,7 +239,8 @@ export default function Generator() {
     fullscreen_transition_time: 20,
     scroll_behavior: 'stay_down',
     mouse_display: 'moving',
-    display_tab: true
+    display_tab: true,
+    show_cta_button: false
   });
   
   // UI state
@@ -366,7 +367,8 @@ export default function Generator() {
       fullscreen_transition_time: 20,
       scroll_behavior: 'stay_down',
       mouse_display: 'moving',
-      display_tab: true
+      display_tab: true,
+      show_cta_button: false
     });
     setActiveTab('create');
     toast.success('Ready for new campaign!');
@@ -1060,6 +1062,25 @@ export default function Generator() {
                       </div>
                     </div>
 
+                    {/* Show CTA Button Option */}
+                    <div className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-white/5">
+                      <input
+                        type="checkbox"
+                        id="showCtaButton"
+                        checked={settings.show_cta_button}
+                        onChange={(e) => setSettings({ ...settings, show_cta_button: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500"
+                      />
+                      <div>
+                        <label htmlFor="showCtaButton" className="text-sm font-medium cursor-pointer">
+                          Show "Book a Call" / "Text us back" Button
+                        </label>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Display a call-to-action button on the video landing page
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Video Position */}
                     <div>
                       <label className="block text-sm font-medium mb-2">
@@ -1132,29 +1153,31 @@ export default function Generator() {
                       </div>
                     )}
 
-                    {/* CTA Button */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Button Text</label>
-                        <input
-                          type="text"
-                          value={settings.button_text}
-                          onChange={(e) => setSettings({ ...settings, button_text: e.target.value })}
-                          className="input-field"
-                          placeholder="Book a Call"
-                        />
+                    {/* CTA Button - Only show when show_cta_button is enabled */}
+                    {settings.show_cta_button && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Button Text</label>
+                          <input
+                            type="text"
+                            value={settings.button_text}
+                            onChange={(e) => setSettings({ ...settings, button_text: e.target.value })}
+                            className="input-field"
+                            placeholder="Book a Call"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Button Link</label>
+                          <input
+                            type="url"
+                            value={settings.button_link}
+                            onChange={(e) => setSettings({ ...settings, button_link: e.target.value })}
+                            className="input-field"
+                            placeholder="https://calendly.com/..."
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Button Link</label>
-                        <input
-                          type="url"
-                          value={settings.button_link}
-                          onChange={(e) => setSettings({ ...settings, button_link: e.target.value })}
-                          className="input-field"
-                          placeholder="https://calendly.com/..."
-                        />
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </section>

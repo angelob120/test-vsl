@@ -303,8 +303,8 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* CTA Button */}
-        {(data?.button_text || data?.calendar_url) && (
+        {/* CTA Button - Only show if show_cta_button is enabled */}
+        {data?.show_cta_button && (data?.button_text || data?.calendar_url) && (
           <div className="text-center">
             <a
               href={data?.calendar_url || data?.button_link || '#'}

@@ -143,6 +143,8 @@ export class VideoProcessor {
           `-t ${effectiveTotalDuration}`,
           `-vf scale=${VIEWPORT_WIDTH}:-1,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:0:'min(ih-${VIEWPORT_HEIGHT},(${scrollFormula})*(ih-${VIEWPORT_HEIGHT}))'`,
           '-c:v libx264',
+          '-preset faster',
+          '-crf 26',
           '-pix_fmt yuv420p',
           `-r ${FPS}`
         ])
@@ -287,7 +289,10 @@ export class VideoProcessor {
           '-map [outv]',
           '-map 1:a?',
           '-c:v libx264',
+          '-preset faster',
+          '-crf 28',
           '-c:a aac',
+          '-b:a 96k',
           '-shortest',
           '-pix_fmt yuv420p'
         ];
@@ -317,7 +322,10 @@ export class VideoProcessor {
           '-map [outv]',
           '-map 1:a?',
           '-c:v libx264',
+          '-preset faster',
+          '-crf 28',
           '-c:a aac',
+          '-b:a 96k',
           '-shortest',
           '-pix_fmt yuv420p'
         ];
@@ -348,7 +356,10 @@ export class VideoProcessor {
         .outputOptions([
           `-t ${duration}`,
           '-c:v libx264',
+          '-preset faster',
+          '-crf 30',
           '-c:a aac',
+          '-b:a 64k',
           '-pix_fmt yuv420p'
         ])
         .output(outputPath)
