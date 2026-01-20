@@ -263,25 +263,42 @@ export class VideoProcessor {
         const animY = `${startY}*(1-(${ease}))`;
         
         if (shape === 'circle') {
-          // Circle mask with ANIMATED RADIUS:
-          // - Before transition: radius = 200 (inscribed circle in 400x400 bubble)
-          // - After transition: radius = 800 (large enough to cover full 1280x720 frame corners)
-          // The diagonal of 1280x720 is ~1469, so radius needs to be >= 735 to cover corners
-          // We use 800 to have some margin
+          // Circle mask that transitions to full rectangle:
+          // - Before t0: Circle mask with radius = min(W,H)/2 (inscribed circle)
+          // - After t0 + animDuration: Alpha = 255 everywhere (full rectangle, no circle)
+          // - During transition: Quick blend from circle to rectangle
+          //
+          // This ensures after transition, the ENTIRE video frame is visible (no masking)
           
-          // For geq filter, time variable is T (uppercase)
-          const pGeq = `max(0,min(1,(T-${t0})/${animDuration}))`;
-          const easeGeq = `((${pGeq})*(${pGeq})*(3-2*(${pGeq})))`;
+          // For geq filter, T = timestamp in seconds
+          // Once transition is complete (T >= t0 + animDuration), show full rectangle (alpha=255)
+          // Before transition starts (T < t0), show circle
+          // During transition, blend
           
-          // Radius animates from 200 (small bubble) to 800 (covers full frame)
-          const startRadius = 200;  // half of 400x400 bubble
-          const endRadius = 800;    // large enough to cover 1280x720 diagonal
-          const animRadius = `(${startRadius}+(${endRadius}-${startRadius})*(${easeGeq}))`;
+          const transitionEnd = t0 + animDuration;
           
-          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(${animRadius},2)),255,0)'`;
+          // Circle formula: pixels inside circle get alpha=255, outside get alpha=0
+          const circleCheck = `lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2))`;
+          
+          // Progress through transition: 0 before t0, 0-1 during, 1 after
+          const transProgress = `max(0,min(1,(T-${t0})/${animDuration}))`;
+          
+          // Alpha calculation:
+          // - If past transition end: 255 (full rectangle)
+          // - If before transition start: circle mask
+          // - During transition: blend circle toward full (expand the visible area)
+          //
+          // We expand the radius during transition: starts at min(W,H)/2, ends at huge value
+          // Effective radius = base_radius + progress * large_extra
+          const expandedRadius = `(min(W,H)/2 + (${transProgress})*2000)`;
+          const expandingCircle = `lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(${expandedRadius},2))`;
+          
+          const alphaExpr = `if(gte(T,${transitionEnd}),255,if(${expandingCircle},255,0))`;
+          
+          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='${alphaExpr}'`;
           
           filterComplex = [
-            // Scale with per-frame animated dimensions, then apply animated circle mask
+            // Scale with per-frame animated dimensions, then apply circle-to-rectangle mask
             `[1:v]scale=w='${animW}':h='${animH}':eval=frame,format=rgba,${circleMask}[ov];`,
             // Overlay with per-frame animated position
             `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
