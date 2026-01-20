@@ -339,7 +339,7 @@ router.get('/status/:campaignId', async (req, res) => {
   }
 });
 
-// Serve video file
+// Serve video file with proper headers
 router.get('/file/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
@@ -353,7 +353,14 @@ router.get('/file/:slug', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Video not found' });
     }
 
-    res.sendFile(result.rows[0].video_path);
+    const videoPath = result.rows[0].video_path;
+    
+    // Set proper headers for video serving
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    
+    res.sendFile(videoPath);
   } catch (error) {
     console.error('Serve video error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -381,7 +388,7 @@ router.get('/preview/:slug', async (req, res) => {
   }
 });
 
-// Serve thumbnail
+// Serve thumbnail with proper headers for OG image fetchers
 router.get('/thumbnail/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
@@ -395,9 +402,75 @@ router.get('/thumbnail/:slug', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Thumbnail not found' });
     }
 
-    res.sendFile(result.rows[0].thumbnail_path);
+    const thumbnailPath = result.rows[0].thumbnail_path;
+    
+    // Set proper headers for social media crawlers
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    res.sendFile(thumbnailPath);
   } catch (error) {
     console.error('Serve thumbnail error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get OG metadata for a video (useful for debugging and preview generation)
+router.get('/og/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    
+    // Determine base URL
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+
+    const result = await pool.query(`
+      SELECT 
+        gv.unique_slug,
+        gv.status,
+        gv.thumbnail_path,
+        l.first_name,
+        l.last_name,
+        l.company_name,
+        l.website_url,
+        c.video_title,
+        c.video_description,
+        c.name as campaign_name
+      FROM generated_videos gv
+      JOIN leads l ON gv.lead_id = l.id
+      JOIN campaigns c ON gv.campaign_id = c.id
+      WHERE gv.unique_slug = $1
+    `, [slug]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+
+    const data = result.rows[0];
+    const companyName = data.company_name || data.last_name || 'You';
+    
+    // Build OG metadata response
+    const ogData = {
+      title: `A video for ${companyName}`,
+      description: data.video_description || `Watch this personalized video created just for ${companyName}`,
+      url: `${baseUrl}/v/${slug}`,
+      image: `${baseUrl}/api/videos/thumbnail/${slug}`,
+      video: `${baseUrl}/api/videos/file/${slug}`,
+      type: 'video.other',
+      siteName: 'Video Message',
+      companyName,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      campaignName: data.campaign_name,
+      status: data.status,
+      hasThumbnail: !!data.thumbnail_path
+    };
+
+    res.json({ success: true, og: ogData });
+  } catch (error) {
+    console.error('Get OG metadata error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

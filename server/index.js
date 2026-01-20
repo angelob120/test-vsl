@@ -9,6 +9,7 @@ import leadRoutes from './routes/leads.js';
 import videoRoutes from './routes/videos.js';
 import { initStorage, STORAGE_PATHS } from './services/storage.js';
 import { startCleanupScheduler } from './services/cleanup.js';
+import { generateOGHtml, isCrawler } from './services/ogMetadata.js';
 
 dotenv.config();
 
@@ -85,9 +86,33 @@ app.get('/debug', async (req, res) => {
 
 app.use(express.static(clientDistPath));
 
-// Landing page route - must be before catch-all
-app.get('/v/:slug', (req, res) => {
-  res.sendFile(path.join(clientDistPath, 'index.html'));
+// Landing page route with dynamic OG meta tags for video previews
+// This enables rich link previews when sharing video links via text, social media, etc.
+app.get('/v/:slug', async (req, res) => {
+  const { slug } = req.params;
+  const indexHtmlPath = path.join(clientDistPath, 'index.html');
+  
+  // Determine base URL for OG tags
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const baseUrl = `${protocol}://${host}`;
+
+  try {
+    // Generate HTML with dynamic OG tags
+    const html = await generateOGHtml(slug, baseUrl, indexHtmlPath);
+    
+    if (html) {
+      res.setHeader('Content-Type', 'text/html');
+      // Cache for crawlers, but allow revalidation
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+      return res.send(html);
+    }
+  } catch (error) {
+    console.error('Error generating OG HTML:', error);
+  }
+
+  // Fallback to regular index.html
+  res.sendFile(indexHtmlPath);
 });
 
 // Catch-all for React Router - serve index.html for any unmatched routes
