@@ -159,9 +159,9 @@ export class VideoProcessor {
       
       if (style === 'full_screen') {
         // FULLSCREEN MODE:
-        // Phase 1 (displayDelay to fullscreenTransitionTime): 
+        // Phase 1 (from t=0 to fullscreenTransitionTime): 
         //   - Website scrolling as background
-        //   - Uploaded video as a bubble in the corner
+        //   - Uploaded video as a bubble in the corner FROM THE START
         // Phase 2 (after fullscreenTransitionTime):
         //   - Uploaded video goes COMPLETELY FULLSCREEN
         //   - Website is NO LONGER VISIBLE AT ALL
@@ -184,11 +184,10 @@ export class VideoProcessor {
           // Create fullscreen version of uploaded video (for Phase 2)
           `[ov_fullscreen_src]${fullscreenFilter}[video_fullscreen];`,
           
-          // Phase 1: Website background with bubble overlay (from displayDelay to fullscreenTransitionTime)
-          `[0:v][video_bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[phase1];`,
+          // Phase 1: Website background with bubble overlay FROM THE START (t=0) until fullscreenTransitionTime
+          `[0:v][video_bubble]overlay=${posX}:${posY}:enable='lt(t,${fullscreenTransitionTime})'[phase1];`,
           
           // Phase 2: Uploaded video fullscreen completely replaces background (after fullscreenTransitionTime)
-          // Use overlay at 0:0 with the fullscreen video, enabled only after transition time
           // The fullscreen video covers the entire frame, making the background invisible
           `[phase1][video_fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
