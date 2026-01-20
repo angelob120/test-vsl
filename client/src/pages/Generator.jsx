@@ -1166,7 +1166,7 @@ export default function Generator() {
               <div className="glass rounded-2xl p-6 sticky top-24">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold">Preview</h3>
-                  <span className="badge badge-info">Step {currentStep}/4</span>
+                  
                 </div>
                 
                 {/* Mockup Preview */}
