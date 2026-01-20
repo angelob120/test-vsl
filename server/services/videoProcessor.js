@@ -212,10 +212,10 @@ export class VideoProcessor {
         // FULLSCREEN MODE:
         // Phase 1 (from t=0 to fullscreenTransitionTime): 
         //   - Website scrolling as background
-        //   - Uploaded video as a BIG BUBBLE (400x400) in the corner FROM THE START (no delay)
+        //   - Uploaded video as a BIG BUBBLE (400x400) in the corner
         // Phase 2 (after fullscreenTransitionTime):
-        //   - Uploaded video goes COMPLETELY FULLSCREEN (fills entire 1280x720)
-        //   - Website is NO LONGER VISIBLE AT ALL - completely replaced
+        //   - ONLY the uploaded video FULLSCREEN - website completely gone
+        //   - Uses concat to hard cut between phases
         
         // Use BIG bubble size for Phase 1
         const bubbleSize = bigBubbleSize; // 400x400
@@ -245,29 +245,27 @@ export class VideoProcessor {
           ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
           : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
         
-        // Fullscreen filter for uploaded video (Phase 2)
-        // Scale to fill entire viewport and crop to exact dimensions
+        // Fullscreen filter - scale video to fill entire viewport
         const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT},setsar=1`;
         
-        // Use blend filter to completely switch between Phase 1 and Phase 2
-        // When t < fullscreenTransitionTime: show A (website + bubble)
-        // When t >= fullscreenTransitionTime: show B (fullscreen video only)
         filterComplex = [
-          // Split the uploaded video into two streams for different phases
+          // Split the uploaded video into two streams
           `[1:v]split=2[ov_bubble_src][ov_fullscreen_src];`,
           
-          // Create BIG bubble version of uploaded video (for Phase 1) - 400x400
+          // Create BIG bubble version (Phase 1)
           `[ov_bubble_src]${bigBubbleFilter}[video_bubble];`,
           
-          // Create fullscreen version of uploaded video (for Phase 2) - fills entire screen
+          // Create fullscreen version (Phase 2)
           `[ov_fullscreen_src]${fullscreenFilter}[video_fullscreen];`,
           
-          // Phase 1 composite: Website background with BIG bubble overlay
-          `[0:v][video_bubble]overlay=${bubblePosX}:${bubblePosY}[phase1];`,
+          // Phase 1: Website + bubble, trim to transition time
+          `[0:v][video_bubble]overlay=${bubblePosX}:${bubblePosY},trim=0:${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase1];`,
           
-          // Use blend to completely SWITCH between phase1 and fullscreen video based on time
-          // if(gte(T,time),B,A) - when T >= transition time, use B (fullscreen), otherwise use A (bubble composite)
-          `[phase1][video_fullscreen]blend=all_expr='if(gte(T,${fullscreenTransitionTime}),B,A)'[outv]`
+          // Phase 2: Fullscreen video only (NO website), start from transition time
+          `[video_fullscreen]trim=${fullscreenTransitionTime},setpts=PTS-STARTPTS[phase2];`,
+          
+          // Concatenate: Phase 1 then Phase 2
+          `[phase1][phase2]concat=n=2:v=1:a=0[outv]`
         ].join('');
         
         outputOptions = [
