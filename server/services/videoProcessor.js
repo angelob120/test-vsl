@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 720;
-const SCROLL_DURATION = 10; // seconds for background scroll
+const SCROLL_DURATION = 15; // seconds for background scroll (default)
 const FPS = 30;
 
 export class VideoProcessor {
@@ -80,14 +80,18 @@ export class VideoProcessor {
   // Create scrolling background video from screenshot
   async createScrollingBackground(screenshotPath, outputPath, duration = SCROLL_DURATION) {
     return new Promise((resolve, reject) => {
-      // Use FFmpeg to create a scrolling effect
+      // Use FFmpeg to create a smooth scrolling effect with easing
+      // Using a cubic easing function for more natural scrolling
+      // Formula: y = x^3 for smooth acceleration and deceleration
+      const easingFormula = `(t/${duration})*(t/${duration})*(3-2*(t/${duration}))`;
+      
       ffmpeg(screenshotPath)
         .inputOptions([
           '-loop 1'
         ])
         .outputOptions([
           `-t ${duration}`,
-          `-vf scale=${VIEWPORT_WIDTH}:-1,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:0:'min(ih-${VIEWPORT_HEIGHT},t/${duration}*(ih-${VIEWPORT_HEIGHT}))'`,
+          `-vf scale=${VIEWPORT_WIDTH}:-1,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:0:'min(ih-${VIEWPORT_HEIGHT},${easingFormula}*(ih-${VIEWPORT_HEIGHT}))'`,
           '-c:v libx264',
           '-pix_fmt yuv420p',
           `-r ${FPS}`
@@ -272,7 +276,8 @@ export class VideoProcessor {
       // Step 2: Create scrolling background video
       console.log(`🎬 Creating scrolling background...`);
       const backgroundVideoPath = path.join(tempDir, 'background.mp4');
-      await this.createScrollingBackground(screenshotPath, backgroundVideoPath, 15);
+      const scrollDuration = settings.scroll_duration || 15;
+      await this.createScrollingBackground(screenshotPath, backgroundVideoPath, scrollDuration);
 
       // Step 3: Overlay video bubble
       console.log(`🔄 Overlaying video bubble...`);

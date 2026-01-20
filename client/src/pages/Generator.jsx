@@ -239,6 +239,7 @@ export default function Generator() {
     dark_mode: false,
     display_delay: 10,
     fullscreen_transition_time: 20,
+    scroll_duration: 15,
     scroll_behavior: 'stay_down',
     mouse_display: 'moving',
     display_tab: true
@@ -1158,6 +1159,25 @@ export default function Generator() {
                         </p>
                       </div>
                     )}
+
+                    {/* Scroll Duration */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Background Scroll Duration (seconds)
+                      </label>
+                      <input
+                        type="number"
+                        value={settings.scroll_duration}
+                        onChange={(e) => setSettings({ ...settings, scroll_duration: parseInt(e.target.value) || 15 })}
+                        className="input-field"
+                        min="5"
+                        max="60"
+                        placeholder="15"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        How long the website takes to scroll from top to bottom
+                      </p>
+                    </div>
 
                     {/* CTA Button */}
                     <div className="grid grid-cols-2 gap-4">
