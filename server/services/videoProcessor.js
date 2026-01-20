@@ -176,8 +176,8 @@ export class VideoProcessor {
         overlaySize = bigBubbleSize;
         break;
       case 'full_screen':
-        // For fullscreen with transition, start with small bubble size
-        overlaySize = smallBubbleSize;
+        // For fullscreen with transition, start with BIG bubble size (400x400)
+        overlaySize = bigBubbleSize;
         break;
       default: // small_bubble
         overlaySize = smallBubbleSize;
@@ -212,34 +212,68 @@ export class VideoProcessor {
         // FULLSCREEN MODE:
         // Phase 1 (from t=0 to fullscreenTransitionTime): 
         //   - Website scrolling as background
-        //   - Uploaded video as a bubble in the corner FROM THE START (no delay)
+        //   - Uploaded video as a BIG BUBBLE (400x400) in the corner FROM THE START (no delay)
         // Phase 2 (after fullscreenTransitionTime):
-        //   - Uploaded video goes COMPLETELY FULLSCREEN
-        //   - Website is NO LONGER VISIBLE AT ALL
+        //   - Uploaded video goes COMPLETELY FULLSCREEN (fills entire 1280x720)
+        //   - Website is NO LONGER VISIBLE AT ALL - completely replaced
         
-        // Circle bubble filter for uploaded video (Phase 1)
-        const circleBubbleFilter = shape === 'circle'
-          ? `scale=${smallBubbleSize.width}:${smallBubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
-          : `scale=${smallBubbleSize.width}:${smallBubbleSize.height},format=rgba`;
+        // Use BIG bubble size for Phase 1
+        const bubbleSize = bigBubbleSize; // 400x400
         
-        // Fullscreen filter for uploaded video (Phase 2) - scale to fill entire viewport
-        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}`;
+        // Recalculate position for BIG bubble
+        let bubblePosX, bubblePosY;
+        switch (position) {
+          case 'bottom_right':
+            bubblePosX = VIEWPORT_WIDTH - bubbleSize.width - padding;
+            bubblePosY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+            break;
+          case 'top_left':
+            bubblePosX = padding;
+            bubblePosY = padding;
+            break;
+          case 'top_right':
+            bubblePosX = VIEWPORT_WIDTH - bubbleSize.width - padding;
+            bubblePosY = padding;
+            break;
+          default: // bottom_left
+            bubblePosX = padding;
+            bubblePosY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+        }
+        
+        // BIG bubble filter for uploaded video (Phase 1) - 400x400
+        const bigBubbleFilter = shape === 'circle'
+          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
+          : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
+        
+        // Fullscreen filter for uploaded video (Phase 2)
+        // Scale to fill entire viewport, crop to exact size, ensure opaque
+        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:(iw-${VIEWPORT_WIDTH})/2:(ih-${VIEWPORT_HEIGHT})/2,setsar=1,format=yuv420p`;
+        
+        // Create a black background to ensure complete coverage
+        const blackBg = `color=black:s=${VIEWPORT_WIDTH}x${VIEWPORT_HEIGHT}:d=1,loop=-1:size=1`;
         
         filterComplex = [
+          // Create black background for Phase 2 to ensure website is completely hidden
+          `${blackBg}[black];`,
+          
           // Split the uploaded video into two streams for different phases
           `[1:v]split=2[ov_bubble_src][ov_fullscreen_src];`,
           
-          // Create circle bubble version of uploaded video (for Phase 1)
-          `[ov_bubble_src]${circleBubbleFilter}[video_bubble];`,
+          // Create BIG bubble version of uploaded video (for Phase 1) - 400x400
+          `[ov_bubble_src]${bigBubbleFilter}[video_bubble];`,
           
           // Create fullscreen version of uploaded video (for Phase 2)
           `[ov_fullscreen_src]${fullscreenFilter}[video_fullscreen];`,
           
-          // Phase 1: Website background with bubble overlay FROM THE START (t=0) until fullscreenTransitionTime
-          `[0:v][video_bubble]overlay=${posX}:${posY}:enable='lt(t,${fullscreenTransitionTime})'[phase1];`,
+          // Phase 1: Website background with BIG bubble overlay FROM THE START (t=0) until fullscreenTransitionTime
+          `[0:v][video_bubble]overlay=${bubblePosX}:${bubblePosY}:enable='lt(t,${fullscreenTransitionTime})'[phase1];`,
           
-          // Phase 2: Uploaded video fullscreen completely replaces background (after fullscreenTransitionTime)
-          `[phase1][video_fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
+          // Phase 2: Black background + fullscreen video completely replaces everything after fullscreenTransitionTime
+          // First overlay black to completely hide the website
+          `[phase1][black]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[phase2];`,
+          
+          // Then overlay the fullscreen video on top
+          `[phase2][video_fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
         
         outputOptions = [
