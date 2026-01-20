@@ -160,58 +160,37 @@ export class VideoProcessor {
       if (style === 'full_screen') {
         // FULLSCREEN MODE:
         // Phase 1 (displayDelay to fullscreenTransitionTime): 
-        //   - Website scrolling as FULLSCREEN background
-        //   - Person video in CIRCLE bubble in corner
+        //   - Website scrolling as background
+        //   - Uploaded video as a bubble in the corner
         // Phase 2 (after fullscreenTransitionTime):
-        //   - Website scrolling as FULLSCREEN background  
-        //   - Person video in RECTANGLE in corner (no circle mask)
+        //   - Uploaded video goes COMPLETELY FULLSCREEN
+        //   - Website is NO LONGER VISIBLE AT ALL
         
-        // Rectangle size for phase 2 (slightly larger than bubble)
-        const rectSize = { width: 280, height: 200 };
-        
-        // Calculate position for rectangle in phase 2
-        let rectPosX, rectPosY;
-        switch (position) {
-          case 'bottom_right':
-            rectPosX = VIEWPORT_WIDTH - rectSize.width - padding;
-            rectPosY = VIEWPORT_HEIGHT - rectSize.height - padding;
-            break;
-          case 'top_left':
-            rectPosX = padding;
-            rectPosY = padding;
-            break;
-          case 'top_right':
-            rectPosX = VIEWPORT_WIDTH - rectSize.width - padding;
-            rectPosY = padding;
-            break;
-          default: // bottom_left
-            rectPosX = padding;
-            rectPosY = VIEWPORT_HEIGHT - rectSize.height - padding;
-        }
-        
-        // Circle bubble filter for person video (Phase 1)
+        // Circle bubble filter for uploaded video (Phase 1)
         const circleBubbleFilter = shape === 'circle'
           ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
           : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
         
-        // Rectangle filter for person video (Phase 2)
-        const rectFilter = `scale=${rectSize.width}:${rectSize.height}`;
+        // Fullscreen filter for uploaded video (Phase 2) - scale to fill entire viewport
+        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}`;
         
         filterComplex = [
-          // Split the person video (overlay) into two streams for different phases
-          `[1:v]split=2[ov_bubble_src][ov_rect_src];`,
+          // Split the uploaded video into two streams for different phases
+          `[1:v]split=2[ov_bubble_src][ov_fullscreen_src];`,
           
-          // Create circle bubble version of person video
-          `[ov_bubble_src]${circleBubbleFilter}[person_bubble];`,
+          // Create circle bubble version of uploaded video (for Phase 1)
+          `[ov_bubble_src]${circleBubbleFilter}[video_bubble];`,
           
-          // Create rectangle version of person video
-          `[ov_rect_src]${rectFilter}[person_rect];`,
+          // Create fullscreen version of uploaded video (for Phase 2)
+          `[ov_fullscreen_src]${fullscreenFilter}[video_fullscreen];`,
           
-          // Overlay circle bubble on website background (Phase 1: displayDelay to fullscreenTransitionTime)
-          `[0:v][person_bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[with_bubble];`,
+          // Phase 1: Website background with bubble overlay (from displayDelay to fullscreenTransitionTime)
+          `[0:v][video_bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[phase1];`,
           
-          // Overlay rectangle on result (Phase 2: after fullscreenTransitionTime)
-          `[with_bubble][person_rect]overlay=${rectPosX}:${rectPosY}:enable='gte(t,${fullscreenTransitionTime})'[outv]`
+          // Phase 2: Uploaded video fullscreen completely replaces background (after fullscreenTransitionTime)
+          // Use overlay at 0:0 with the fullscreen video, enabled only after transition time
+          // The fullscreen video covers the entire frame, making the background invisible
+          `[phase1][video_fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
       } else if (shape === 'circle' && style !== 'full_screen') {
         // Circle mask for bubble
