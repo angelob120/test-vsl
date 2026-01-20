@@ -109,47 +109,70 @@ export class VideoProcessor {
       position = 'bottom_left',
       shape = 'circle',
       style = 'small_bubble',
-      displayDelay = 2
+      displayDelay = 2,
+      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to fullscreen
     } = config;
 
     // Calculate overlay dimensions based on style
     let overlaySize;
+    let bubbleSize = { width: 200, height: 200 }; // Default bubble size for fullscreen transition
+    
     switch (style) {
       case 'big_bubble':
         overlaySize = { width: 400, height: 400 };
         break;
       case 'full_screen':
-        overlaySize = { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT };
+        // For fullscreen with transition, start with bubble size
+        overlaySize = bubbleSize;
         break;
       default: // small_bubble
         overlaySize = { width: 200, height: 200 };
     }
 
-    // Calculate position
+    // Calculate position for bubble (before fullscreen transition)
     let posX, posY;
     const padding = 20;
     switch (position) {
       case 'bottom_right':
-        posX = VIEWPORT_WIDTH - overlaySize.width - padding;
-        posY = VIEWPORT_HEIGHT - overlaySize.height - padding;
+        posX = VIEWPORT_WIDTH - bubbleSize.width - padding;
+        posY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
         break;
       case 'top_left':
         posX = padding;
         posY = padding;
         break;
       case 'top_right':
-        posX = VIEWPORT_WIDTH - overlaySize.width - padding;
+        posX = VIEWPORT_WIDTH - bubbleSize.width - padding;
         posY = padding;
         break;
       default: // bottom_left
         posX = padding;
-        posY = VIEWPORT_HEIGHT - overlaySize.height - padding;
+        posY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
     }
 
     return new Promise((resolve, reject) => {
       let filterComplex;
       
-      if (shape === 'circle' && style !== 'full_screen') {
+      if (style === 'full_screen') {
+        // Fullscreen mode with transition from corner
+        // Create bubble version
+        const bubbleFilter = shape === 'circle' 
+          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=yuva420p,geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-1)*gt(abs(H/2-Y),H/2-1),0,if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0))'`
+          : `scale=${bubbleSize.width}:${bubbleSize.height}`;
+        
+        // Create fullscreen version
+        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}`;
+        
+        filterComplex = [
+          // Create bubble overlay (shown from displayDelay to fullscreenTransitionTime)
+          `[1:v]${bubbleFilter}[bubble];`,
+          // Create fullscreen overlay (shown after fullscreenTransitionTime)
+          `[1:v]${fullscreenFilter}[fullscreen];`,
+          // Combine: show bubble in corner first, then fullscreen
+          `[0:v][bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[bubble_out];`,
+          `[bubble_out][fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
+        ].join('');
+      } else if (shape === 'circle' && style !== 'full_screen') {
         // Circle mask for bubble
         filterComplex = [
           `[1:v]scale=${overlaySize.width}:${overlaySize.height},format=yuva420p,geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-1)*gt(abs(H/2-Y),H/2-1),0,if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0))'[ov];`,
@@ -262,7 +285,8 @@ export class VideoProcessor {
         position: settings.video_position,
         shape: settings.video_shape,
         style: settings.video_style,
-        displayDelay: settings.display_delay || 2
+        displayDelay: settings.display_delay || 2,
+        fullscreenTransitionTime: settings.fullscreen_transition_time || 20
       });
 
       // Step 4: Create preview

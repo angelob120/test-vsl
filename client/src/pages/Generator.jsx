@@ -238,6 +238,7 @@ export default function Generator() {
     bg_hover_color: '#4f46e5',
     dark_mode: false,
     display_delay: 10,
+    fullscreen_transition_time: 20,
     scroll_behavior: 'stay_down',
     mouse_display: 'moving',
     display_tab: true
@@ -1063,49 +1064,55 @@ export default function Generator() {
                     </div>
 
                     {/* Video Position */}
-                    {settings.video_style !== 'full_screen' && (
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Position</label>
-                        <div className="grid grid-cols-2 gap-3">
-                          {videoPositions.map((pos) => (
-                            <button
-                              key={pos.id}
-                              onClick={() => setSettings({ ...settings, video_position: pos.id })}
-                              className={`p-3 rounded-xl border transition-all text-sm ${
-                                settings.video_position === pos.id
-                                  ? 'border-primary-500 bg-primary-500/10'
-                                  : 'border-white/10 hover:border-white/20'
-                              }`}
-                            >
-                              {pos.name}
-                            </button>
-                          ))}
-                        </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Position
+                        {settings.video_style === 'full_screen' && (
+                          <span className="text-xs text-gray-400 ml-2">(Starting position before fullscreen)</span>
+                        )}
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {videoPositions.map((pos) => (
+                          <button
+                            key={pos.id}
+                            onClick={() => setSettings({ ...settings, video_position: pos.id })}
+                            className={`p-3 rounded-xl border transition-all text-sm ${
+                              settings.video_position === pos.id
+                                ? 'border-primary-500 bg-primary-500/10'
+                                : 'border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            {pos.name}
+                          </button>
+                        ))}
                       </div>
-                    )}
+                    </div>
 
                     {/* Video Shape */}
-                    {settings.video_style !== 'full_screen' && (
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Shape</label>
-                        <div className="grid grid-cols-2 gap-3">
-                          {videoShapes.map((shape) => (
-                            <button
-                              key={shape.id}
-                              onClick={() => setSettings({ ...settings, video_shape: shape.id })}
-                              className={`p-3 rounded-xl border transition-all flex items-center justify-center gap-2 ${
-                                settings.video_shape === shape.id
-                                  ? 'border-primary-500 bg-primary-500/10'
-                                  : 'border-white/10 hover:border-white/20'
-                              }`}
-                            >
-                              <shape.icon className="w-5 h-5" />
-                              <span className="text-sm">{shape.name}</span>
-                            </button>
-                          ))}
-                        </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Shape
+                        {settings.video_style === 'full_screen' && (
+                          <span className="text-xs text-gray-400 ml-2">(Starting shape before fullscreen)</span>
+                        )}
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {videoShapes.map((shape) => (
+                          <button
+                            key={shape.id}
+                            onClick={() => setSettings({ ...settings, video_shape: shape.id })}
+                            className={`p-3 rounded-xl border transition-all flex items-center justify-center gap-2 ${
+                              settings.video_shape === shape.id
+                                ? 'border-primary-500 bg-primary-500/10'
+                                : 'border-white/10 hover:border-white/20'
+                            }`}
+                          >
+                            <shape.icon className="w-5 h-5" />
+                            <span className="text-sm">{shape.name}</span>
+                          </button>
+                        ))}
                       </div>
-                    )}
+                    </div>
 
                     {/* Title & Description */}
                     <div className="grid grid-cols-2 gap-4">
@@ -1130,6 +1137,27 @@ export default function Generator() {
                         />
                       </div>
                     </div>
+
+                    {/* Fullscreen Transition Time - Only for full_screen style */}
+                    {settings.video_style === 'full_screen' && (
+                      <div>
+                        <label className="block text-sm font-medium mb-2">
+                          Fullscreen Transition Time (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          value={settings.fullscreen_transition_time}
+                          onChange={(e) => setSettings({ ...settings, fullscreen_transition_time: parseInt(e.target.value) || 20 })}
+                          className="input-field"
+                          min="1"
+                          max="300"
+                          placeholder="20"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                          Time in seconds before video transitions from corner to fullscreen
+                        </p>
+                      </div>
+                    )}
 
                     {/* CTA Button */}
                     <div className="grid grid-cols-2 gap-4">
