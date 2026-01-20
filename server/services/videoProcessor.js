@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 720;
-const FPS = 30;
+const FPS = 24;
 
 // Loom-style scroll settings
 const SCROLL_STEP_DURATION = 2.5;  // Total duration of each step (scroll + pause)
