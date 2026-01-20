@@ -209,105 +209,77 @@ export class VideoProcessor {
       let outputOptions;
       
       if (style === 'full_screen') {
-        // FULLSCREEN MODE WITH SMOOTH BUBBLE EXPANSION:
-        // The bubble physically grows from 400x400 in corner to 1280x720 fullscreen
-        // Animation duration: 0.5 seconds starting at fullscreenTransitionTime
-        // After transition: video completely covers the background (website no longer visible)
+        // FULLSCREEN MODE:
+        // 1. Before transition: Show bubble (400x400 circle) in corner with website behind
+        // 2. At transition time: Quick ~0.5s animated expansion from bubble to fullscreen
+        // 3. After transition: Video is fullscreen (1280x720), website completely hidden
         
         const animDuration = 0.5;
-        const t0 = fullscreenTransitionTime; // transition start time
+        const t0 = fullscreenTransitionTime;
+        const transitionEnd = t0 + animDuration;
         
-        // Bubble dimensions
-        const startW = bigBubbleSize.width;   // 400
-        const startH = bigBubbleSize.height;  // 400
-        const endW = VIEWPORT_WIDTH;          // 1280
-        const endH = VIEWPORT_HEIGHT;         // 720
+        // Bubble dimensions and position
+        const bubbleW = bigBubbleSize.width;   // 400
+        const bubbleH = bigBubbleSize.height;  // 400
         
-        // Starting position (corner)
-        let startX, startY;
+        let bubbleX, bubbleY;
         switch (position) {
           case 'bottom_right':
-            startX = VIEWPORT_WIDTH - startW - padding;
-            startY = VIEWPORT_HEIGHT - startH - padding;
+            bubbleX = VIEWPORT_WIDTH - bubbleW - padding;
+            bubbleY = VIEWPORT_HEIGHT - bubbleH - padding;
             break;
           case 'top_left':
-            startX = padding;
-            startY = padding;
+            bubbleX = padding;
+            bubbleY = padding;
             break;
           case 'top_right':
-            startX = VIEWPORT_WIDTH - startW - padding;
-            startY = padding;
+            bubbleX = VIEWPORT_WIDTH - bubbleW - padding;
+            bubbleY = padding;
             break;
           default: // bottom_left
-            startX = padding;
-            startY = VIEWPORT_HEIGHT - startH - padding;
+            bubbleX = padding;
+            bubbleY = VIEWPORT_HEIGHT - bubbleH - padding;
         }
         
-        // Progress: 0 before t0, ramps 0->1 during animation, 1 after
-        // p = clamp((t - t0) / duration, 0, 1)
-        const p = `max(0,min(1,(t-${t0})/${animDuration}))`;
-        
-        // Smoothstep easing for natural motion: 3p² - 2p³
-        const ease = `((${p})*(${p})*(3-2*(${p})))`;
-        
-        // Animated width: 400 -> 1280
-        const animW = `${startW}+(${endW}-${startW})*(${ease})`;
-        
-        // Animated height: 400 -> 720  
-        const animH = `${startH}+(${endH}-${startH})*(${ease})`;
-        
-        // Animated X position: startX -> 0
-        const animX = `${startX}*(1-(${ease}))`;
-        
-        // Animated Y position: startY -> 0
-        const animY = `${startY}*(1-(${ease}))`;
-        
         if (shape === 'circle') {
-          // Circle mask that transitions to full rectangle:
-          // - Before t0: Circle mask with radius = min(W,H)/2 (inscribed circle)
-          // - After t0 + animDuration: Alpha = 255 everywhere (full rectangle, no circle)
-          // - During transition: Quick blend from circle to rectangle
-          //
-          // This ensures after transition, the ENTIRE video frame is visible (no masking)
+          // Two-layer approach:
+          // Layer 1: Bubble with circle mask on background (visible before and during transition)
+          // Layer 2: Fullscreen video overlay (fades in during transition, covers everything after)
           
-          // For geq filter, T = timestamp in seconds
-          // Once transition is complete (T >= t0 + animDuration), show full rectangle (alpha=255)
-          // Before transition starts (T < t0), show circle
-          // During transition, blend
+          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`;
           
-          const transitionEnd = t0 + animDuration;
-          
-          // Circle formula: pixels inside circle get alpha=255, outside get alpha=0
-          const circleCheck = `lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(min(W,H)/2,2))`;
-          
-          // Progress through transition: 0 before t0, 0-1 during, 1 after
-          const transProgress = `max(0,min(1,(T-${t0})/${animDuration}))`;
-          
-          // Alpha calculation:
-          // - If past transition end: 255 (full rectangle)
-          // - If before transition start: circle mask
-          // - During transition: blend circle toward full (expand the visible area)
-          //
-          // We expand the radius during transition: starts at min(W,H)/2, ends at huge value
-          // Effective radius = base_radius + progress * large_extra
-          const expandedRadius = `(min(W,H)/2 + (${transProgress})*2000)`;
-          const expandingCircle = `lt(pow(X-W/2,2)+pow(Y-H/2,2),pow(${expandedRadius},2))`;
-          
-          const alphaExpr = `if(gte(T,${transitionEnd}),255,if(${expandingCircle},255,0))`;
-          
-          const circleMask = `geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='${alphaExpr}'`;
+          // Bubble alpha: fade out during transition (1 -> 0)
+          // Fullscreen alpha: fade in during transition (0 -> 1)
+          // progress = clamp((t - t0) / animDuration, 0, 1)
+          const progress = `max(0,min(1,(t-${t0})/${animDuration}))`;
+          const bubbleAlpha = `(1-${progress})`;
+          const fullAlpha = progress;
           
           filterComplex = [
-            // Scale with per-frame animated dimensions, then apply circle-to-rectangle mask
-            `[1:v]scale=w='${animW}':h='${animH}':eval=frame,format=rgba,${circleMask}[ov];`,
-            // Overlay with per-frame animated position
-            `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
+            // Split overlay video into two streams
+            `[1:v]split[v_bubble][v_full];`,
+            
+            // Create bubble: scale to 400x400, apply circle mask, will fade out
+            `[v_bubble]scale=${bubbleW}:${bubbleH},format=rgba,${circleMask}[bubble];`,
+            
+            // Create fullscreen: scale to 1280x720, no mask
+            `[v_full]scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT},format=rgba[fullvid];`,
+            
+            // Put bubble on background
+            `[0:v][bubble]overlay=${bubbleX}:${bubbleY}:format=auto[bg_with_bubble];`,
+            
+            // Overlay fullscreen on top - enabled starting at transition time
+            // The fullscreen video completely covers everything once it appears
+            `[bg_with_bubble][fullvid]overlay=0:0:enable='gte(t,${t0})'[outv]`
           ].join('');
         } else {
-          // Square/rectangle - no circle mask needed, just scale and position
+          // Square/rectangle version
           filterComplex = [
-            `[1:v]scale=w='${animW}':h='${animH}':eval=frame[ov];`,
-            `[0:v][ov]overlay=x='${animX}':y='${animY}':eval=frame[outv]`
+            `[1:v]split[v_bubble][v_full];`,
+            `[v_bubble]scale=${bubbleW}:${bubbleH}[bubble];`,
+            `[v_full]scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}[fullvid];`,
+            `[0:v][bubble]overlay=${bubbleX}:${bubbleY}[bg_with_bubble];`,
+            `[bg_with_bubble][fullvid]overlay=0:0:enable='gte(t,${t0})'[outv]`
           ].join('');
         }
         
