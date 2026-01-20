@@ -19,8 +19,6 @@ export class VideoProcessor {
     this.browser = null;
   }
 
-
-  x
   async init() {
     this.browser = await puppeteer.launch({
       headless: 'new',
@@ -37,6 +35,20 @@ export class VideoProcessor {
     if (this.browser) {
       await this.browser.close();
     }
+  }
+
+  // Get video duration using ffprobe
+  async getVideoDuration(videoPath) {
+    return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(videoPath, (err, metadata) => {
+        if (err) {
+          reject(err);
+        } else {
+          const duration = metadata.format.duration || 0;
+          resolve(duration);
+        }
+      });
+    });
   }
 
   // Capture full-page screenshot of website
@@ -80,19 +92,22 @@ export class VideoProcessor {
   }
 
   // Create scrolling background video from screenshot
-  async createScrollingBackground(screenshotPath, outputPath, duration = SCROLL_DURATION) {
+  // scrollDuration = how long to scroll
+  // totalDuration = total video length (if longer than scrollDuration, freeze on last frame)
+  async createScrollingBackground(screenshotPath, outputPath, scrollDuration = SCROLL_DURATION, totalDuration = null) {
+    const effectiveTotalDuration = totalDuration || scrollDuration;
+    
     return new Promise((resolve, reject) => {
       // Use FFmpeg to create a smooth scrolling effect with easing
-      // Using a cubic easing function for more natural scrolling
-      // Formula: y = x^3 for smooth acceleration and deceleration
-      const easingFormula = `(t/${duration})*(t/${duration})*(3-2*(t/${duration}))`;
+      // Scroll happens during scrollDuration, then freezes at bottom for remaining time
+      const easingFormula = `(min(t,${scrollDuration})/${scrollDuration})*(min(t,${scrollDuration})/${scrollDuration})*(3-2*(min(t,${scrollDuration})/${scrollDuration}))`;
       
       ffmpeg(screenshotPath)
         .inputOptions([
           '-loop 1'
         ])
         .outputOptions([
-          `-t ${duration}`,
+          `-t ${effectiveTotalDuration}`,
           `-vf scale=${VIEWPORT_WIDTH}:-1,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:0:'min(ih-${VIEWPORT_HEIGHT},${easingFormula}*(ih-${VIEWPORT_HEIGHT}))'`,
           '-c:v libx264',
           '-pix_fmt yuv420p',
@@ -116,48 +131,50 @@ export class VideoProcessor {
       shape = 'circle',
       style = 'small_bubble',
       displayDelay = 2,
-      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to rectangle/fullscreen
+      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to rectangle/fullscreen (ONLY for full_screen style)
     } = config;
 
     // Calculate overlay dimensions based on style
     let overlaySize;
-    let bubbleSize = { width: 200, height: 200 }; // Default bubble size
+    const smallBubbleSize = { width: 200, height: 200 };
+    const bigBubbleSize = { width: 400, height: 400 };
     
     switch (style) {
       case 'big_bubble':
-        overlaySize = { width: 400, height: 400 };
+        overlaySize = bigBubbleSize;
         break;
       case 'full_screen':
-        // For fullscreen with transition, start with bubble size
-        overlaySize = bubbleSize;
+        // For fullscreen with transition, start with small bubble size
+        overlaySize = smallBubbleSize;
         break;
       default: // small_bubble
-        overlaySize = { width: 200, height: 200 };
+        overlaySize = smallBubbleSize;
     }
 
-    // Calculate position for bubble in corner
+    // Calculate position for bubble in corner - use the actual overlay size for positioning
     let posX, posY;
     const padding = 20;
     switch (position) {
       case 'bottom_right':
-        posX = VIEWPORT_WIDTH - bubbleSize.width - padding;
-        posY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+        posX = VIEWPORT_WIDTH - overlaySize.width - padding;
+        posY = VIEWPORT_HEIGHT - overlaySize.height - padding;
         break;
       case 'top_left':
         posX = padding;
         posY = padding;
         break;
       case 'top_right':
-        posX = VIEWPORT_WIDTH - bubbleSize.width - padding;
+        posX = VIEWPORT_WIDTH - overlaySize.width - padding;
         posY = padding;
         break;
       default: // bottom_left
         posX = padding;
-        posY = VIEWPORT_HEIGHT - bubbleSize.height - padding;
+        posY = VIEWPORT_HEIGHT - overlaySize.height - padding;
     }
 
     return new Promise((resolve, reject) => {
       let filterComplex;
+      let outputOptions;
       
       if (style === 'full_screen') {
         // FULLSCREEN MODE:
@@ -170,8 +187,8 @@ export class VideoProcessor {
         
         // Circle bubble filter for uploaded video (Phase 1)
         const circleBubbleFilter = shape === 'circle'
-          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
-          : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
+          ? `scale=${smallBubbleSize.width}:${smallBubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
+          : `scale=${smallBubbleSize.width}:${smallBubbleSize.height},format=rgba`;
         
         // Fullscreen filter for uploaded video (Phase 2) - scale to fill entire viewport
         const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}`;
@@ -193,18 +210,47 @@ export class VideoProcessor {
           // The fullscreen video covers the entire frame, making the background invisible
           `[phase1][video_fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
-      } else if (shape === 'circle' && style !== 'full_screen') {
-        // Circle mask for bubble
-        filterComplex = [
-          `[1:v]scale=${overlaySize.width}:${overlaySize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'[ov];`,
-          `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
-        ].join('');
+        
+        // For fullscreen mode, use -shortest to end when overlay video ends
+        outputOptions = [
+          '-map [outv]',
+          '-map 1:a?',
+          '-c:v libx264',
+          '-c:a aac',
+          '-shortest',
+          '-pix_fmt yuv420p'
+        ];
       } else {
-        // Square/rectangle overlay
-        filterComplex = [
-          `[1:v]scale=${overlaySize.width}:${overlaySize.height}[ov];`,
-          `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
-        ].join('');
+        // BUBBLE MODE (small_bubble or big_bubble):
+        // - Bubble stays the SAME SIZE and SHAPE throughout the entire video
+        // - NO transitions, NO fullscreen
+        // - Video plays until the uploaded video completes
+        // - Background freezes on last frame when scrolling ends
+        
+        if (shape === 'circle') {
+          // Circle mask for bubble - stays circle the ENTIRE time
+          filterComplex = [
+            `[1:v]scale=${overlaySize.width}:${overlaySize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'[ov];`,
+            `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
+          ].join('');
+        } else {
+          // Square/rectangle overlay - stays square the ENTIRE time
+          filterComplex = [
+            `[1:v]scale=${overlaySize.width}:${overlaySize.height}[ov];`,
+            `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
+          ].join('');
+        }
+        
+        // For bubble modes, use the overlay video duration (no -shortest)
+        // The background has already been extended to match overlay duration
+        outputOptions = [
+          '-map [outv]',
+          '-map 1:a?',
+          '-c:v libx264',
+          '-c:a aac',
+          '-shortest', // This will now work correctly since background is extended
+          '-pix_fmt yuv420p'
+        ];
       }
 
       const command = ffmpeg()
@@ -218,14 +264,7 @@ export class VideoProcessor {
 
       command
         .complexFilter(filterComplex)
-        .outputOptions([
-          '-map [outv]',
-          '-map 1:a?',
-          '-c:v libx264',
-          '-c:a aac',
-          '-shortest',
-          '-pix_fmt yuv420p'
-        ])
+        .outputOptions(outputOptions)
         .output(outputPath)
         .on('end', () => resolve({ success: true }))
         .on('error', (err) => reject(err))
@@ -281,7 +320,12 @@ export class VideoProcessor {
     await fs.mkdir(tempDir, { recursive: true });
 
     try {
-      // Step 1: Capture website screenshot
+      // Step 1: Get the duration of the intro video
+      console.log(`⏱️ Getting intro video duration...`);
+      const introVideoDuration = await this.getVideoDuration(introVideoPath);
+      console.log(`   Intro video duration: ${introVideoDuration.toFixed(2)}s`);
+
+      // Step 2: Capture website screenshot
       console.log(`📸 Capturing website: ${websiteUrl}`);
       const screenshotPath = path.join(tempDir, 'screenshot.png');
       const captureResult = await this.captureWebsite(websiteUrl, screenshotPath);
@@ -290,14 +334,32 @@ export class VideoProcessor {
         throw new Error(`Failed to capture website: ${captureResult.error}`);
       }
 
-      // Step 2: Create scrolling background video
+      // Step 3: Create scrolling background video
       console.log(`🎬 Creating scrolling background...`);
       const backgroundVideoPath = path.join(tempDir, 'background.mp4');
       const scrollDuration = settings.scroll_duration || 15;
-      await this.createScrollingBackground(screenshotPath, backgroundVideoPath, scrollDuration);
+      const videoStyle = settings.video_style || 'small_bubble';
+      
+      // For bubble styles (small_bubble, big_bubble):
+      // - Extend background to match intro video duration
+      // - Website scrolls for scrollDuration, then freezes on last frame
+      // For full_screen style:
+      // - Just use scroll duration (video will transition to fullscreen anyway)
+      let totalBackgroundDuration;
+      if (videoStyle === 'small_bubble' || videoStyle === 'big_bubble') {
+        // Background needs to be at least as long as the intro video
+        // Add a small buffer to ensure smooth ending
+        totalBackgroundDuration = Math.max(scrollDuration, introVideoDuration + 1);
+        console.log(`   Bubble mode: extending background to ${totalBackgroundDuration.toFixed(2)}s (scroll: ${scrollDuration}s, then freeze)`);
+      } else {
+        // Full screen mode - just use scroll duration
+        totalBackgroundDuration = scrollDuration;
+      }
+      
+      await this.createScrollingBackground(screenshotPath, backgroundVideoPath, scrollDuration, totalBackgroundDuration);
 
-      // Step 3: Overlay video bubble
-      console.log(`🔄 Overlaying video bubble...`);
+      // Step 4: Overlay video bubble
+      console.log(`🔄 Overlaying video bubble (style: ${videoStyle})...`);
       const finalVideoPath = path.join(outputDir, `${leadId}.mp4`);
       await this.createVideoWithOverlay({
         backgroundVideoPath,
@@ -306,18 +368,18 @@ export class VideoProcessor {
         outputPath: finalVideoPath,
         position: settings.video_position,
         shape: settings.video_shape,
-        style: settings.video_style,
+        style: videoStyle,
         displayDelay: settings.display_delay || 2,
         fullscreenTransitionTime: settings.fullscreen_transition_time || 20
       });
 
-      // Step 4: Create preview
+      // Step 5: Create preview
       console.log(`📹 Creating preview...`);
       const previewPath = path.join(STORAGE_PATHS.previews, `${leadId}_preview.mp4`);
       await fs.mkdir(path.dirname(previewPath), { recursive: true });
       await this.createPreview(finalVideoPath, previewPath, 8);
 
-      // Step 5: Create thumbnail
+      // Step 6: Create thumbnail
       console.log(`🖼️ Creating thumbnail...`);
       const thumbnailPath = path.join(STORAGE_PATHS.thumbnails, `${leadId}.jpg`);
       await fs.mkdir(path.dirname(thumbnailPath), { recursive: true });
