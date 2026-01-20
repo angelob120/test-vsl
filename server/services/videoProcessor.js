@@ -114,12 +114,12 @@ export class VideoProcessor {
       shape = 'circle',
       style = 'small_bubble',
       displayDelay = 2,
-      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to fullscreen
+      fullscreenTransitionTime = 20 // Time in seconds when bubble transitions to rectangle/fullscreen
     } = config;
 
     // Calculate overlay dimensions based on style
     let overlaySize;
-    let bubbleSize = { width: 200, height: 200 }; // Default bubble size for fullscreen transition
+    let bubbleSize = { width: 200, height: 200 }; // Default bubble size
     
     switch (style) {
       case 'big_bubble':
@@ -133,7 +133,7 @@ export class VideoProcessor {
         overlaySize = { width: 200, height: 200 };
     }
 
-    // Calculate position for bubble (before fullscreen transition)
+    // Calculate position for bubble in corner
     let posX, posY;
     const padding = 20;
     switch (position) {
@@ -158,31 +158,60 @@ export class VideoProcessor {
       let filterComplex;
       
       if (style === 'full_screen') {
-        // Fullscreen mode with transition from corner bubble to fullscreen
-        // The overlay video starts as a small bubble in the corner, then goes fullscreen
+        // FULLSCREEN MODE:
+        // Phase 1 (displayDelay to fullscreenTransitionTime): 
+        //   - Website scrolling as FULLSCREEN background
+        //   - Person video in CIRCLE bubble in corner
+        // Phase 2 (after fullscreenTransitionTime):
+        //   - Website scrolling as FULLSCREEN background  
+        //   - Person video in RECTANGLE in corner (no circle mask)
         
-        // Create bubble filter (for the initial phase)
-        const bubbleFilter = shape === 'circle' 
+        // Rectangle size for phase 2 (slightly larger than bubble)
+        const rectSize = { width: 280, height: 200 };
+        
+        // Calculate position for rectangle in phase 2
+        let rectPosX, rectPosY;
+        switch (position) {
+          case 'bottom_right':
+            rectPosX = VIEWPORT_WIDTH - rectSize.width - padding;
+            rectPosY = VIEWPORT_HEIGHT - rectSize.height - padding;
+            break;
+          case 'top_left':
+            rectPosX = padding;
+            rectPosY = padding;
+            break;
+          case 'top_right':
+            rectPosX = VIEWPORT_WIDTH - rectSize.width - padding;
+            rectPosY = padding;
+            break;
+          default: // bottom_left
+            rectPosX = padding;
+            rectPosY = VIEWPORT_HEIGHT - rectSize.height - padding;
+        }
+        
+        // Circle bubble filter for person video (Phase 1)
+        const circleBubbleFilter = shape === 'circle'
           ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
           : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
         
-        // Create fullscreen filter
-        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,format=rgba`;
+        // Rectangle filter for person video (Phase 2)
+        const rectFilter = `scale=${rectSize.width}:${rectSize.height}`;
         
-        // Use a split and overlay approach for clean transition
-        // Phase 1 (displayDelay to fullscreenTransitionTime): bubble in corner over background
-        // Phase 2 (after fullscreenTransitionTime): overlay video fullscreen over background
         filterComplex = [
-          // Split the overlay video into two streams
-          `[1:v]split=2[ov1][ov2];`,
-          // Create the bubble version
-          `[ov1]${bubbleFilter}[bubble];`,
-          // Create the fullscreen version
-          `[ov2]${fullscreenFilter}[fullscreen];`,
-          // First: overlay bubble on background during the bubble phase
-          `[0:v][bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[phase1];`,
-          // Second: overlay fullscreen on the result after transition time
-          `[phase1][fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
+          // Split the person video (overlay) into two streams for different phases
+          `[1:v]split=2[ov_bubble_src][ov_rect_src];`,
+          
+          // Create circle bubble version of person video
+          `[ov_bubble_src]${circleBubbleFilter}[person_bubble];`,
+          
+          // Create rectangle version of person video
+          `[ov_rect_src]${rectFilter}[person_rect];`,
+          
+          // Overlay circle bubble on website background (Phase 1: displayDelay to fullscreenTransitionTime)
+          `[0:v][person_bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[with_bubble];`,
+          
+          // Overlay rectangle on result (Phase 2: after fullscreenTransitionTime)
+          `[with_bubble][person_rect]overlay=${rectPosX}:${rectPosY}:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
       } else if (shape === 'circle' && style !== 'full_screen') {
         // Circle mask for bubble
