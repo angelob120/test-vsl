@@ -158,28 +158,36 @@ export class VideoProcessor {
       let filterComplex;
       
       if (style === 'full_screen') {
-        // Fullscreen mode with transition from corner
-        // Create bubble version
+        // Fullscreen mode with transition from corner bubble to fullscreen
+        // The overlay video starts as a small bubble in the corner, then goes fullscreen
+        
+        // Create bubble filter (for the initial phase)
         const bubbleFilter = shape === 'circle' 
-          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=yuva420p,geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-1)*gt(abs(H/2-Y),H/2-1),0,if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0))'`
-          : `scale=${bubbleSize.width}:${bubbleSize.height}`;
+          ? `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'`
+          : `scale=${bubbleSize.width}:${bubbleSize.height},format=rgba`;
         
-        // Create fullscreen version
-        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}`;
+        // Create fullscreen filter
+        const fullscreenFilter = `scale=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${VIEWPORT_WIDTH}:${VIEWPORT_HEIGHT}:(ow-iw)/2:(oh-ih)/2,format=rgba`;
         
+        // Use a split and overlay approach for clean transition
+        // Phase 1 (displayDelay to fullscreenTransitionTime): bubble in corner over background
+        // Phase 2 (after fullscreenTransitionTime): overlay video fullscreen over background
         filterComplex = [
-          // Create bubble overlay (shown from displayDelay to fullscreenTransitionTime)
-          `[1:v]${bubbleFilter}[bubble];`,
-          // Create fullscreen overlay (shown after fullscreenTransitionTime)
-          `[1:v]${fullscreenFilter}[fullscreen];`,
-          // Combine: show bubble in corner first, then fullscreen
-          `[0:v][bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[bubble_out];`,
-          `[bubble_out][fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
+          // Split the overlay video into two streams
+          `[1:v]split=2[ov1][ov2];`,
+          // Create the bubble version
+          `[ov1]${bubbleFilter}[bubble];`,
+          // Create the fullscreen version
+          `[ov2]${fullscreenFilter}[fullscreen];`,
+          // First: overlay bubble on background during the bubble phase
+          `[0:v][bubble]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})*lt(t,${fullscreenTransitionTime})'[phase1];`,
+          // Second: overlay fullscreen on the result after transition time
+          `[phase1][fullscreen]overlay=0:0:enable='gte(t,${fullscreenTransitionTime})'[outv]`
         ].join('');
       } else if (shape === 'circle' && style !== 'full_screen') {
         // Circle mask for bubble
         filterComplex = [
-          `[1:v]scale=${overlaySize.width}:${overlaySize.height},format=yuva420p,geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-1)*gt(abs(H/2-Y),H/2-1),0,if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0))'[ov];`,
+          `[1:v]scale=${overlaySize.width}:${overlaySize.height},format=rgba,geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':a='if(lt((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'[ov];`,
           `[0:v][ov]overlay=${posX}:${posY}:enable='gte(t,${displayDelay})'[outv]`
         ].join('');
       } else {
