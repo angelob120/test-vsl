@@ -109,7 +109,7 @@ export class VideoProcessor {
       // Calculate number of steps based on scroll duration
       const numSteps = Math.max(3, Math.ceil(scrollDuration / SCROLL_STEP_DURATION));
       const stepDuration = scrollDuration / numSteps;
-      const scrollPhase = stepDuration * 0.7; // 70% of each step is scrolling
+      const scrollPhase = stepDuration * 0.805; // 80.5% of each step is scrolling (15% slower than before)
       
       // FFmpeg expression for Loom-style step scrolling:
       // - floor(t/stepDuration) gives current step number
